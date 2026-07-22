@@ -5,10 +5,8 @@ describes what the app **is today** and how to change it safely: architecture, d
 model, module map, invariants, and the common "how do I change X" recipes. Read it
 first.
 
-Where a field-level or rule-level detail matters, the **code is authoritative**;
-`Data_Model_Architecture_Proposal_v3.md` is the next-finest reference, and the
-`StageN_*` briefs in this folder are historical archaeology only. Where a doc and the
-code disagree, the code wins and the doc is what gets fixed.
+Where a field-level or rule-level detail matters, the **code is authoritative** — where a
+doc and the code disagree, the code wins and the doc is what gets fixed.
 
 ---
 
@@ -250,12 +248,9 @@ fields, and every other non-indexed field are plain unindexed and so are not in 
 
 ### The versioning rule
 
-`version(1)` is still editable **in place** — but only because **nothing has shipped that
-needs migration**. There is no live data to migrate, so the single block absorbs every
-change; reconcile any schema edit with **Reset App to Start** + re-seed. The moment real
-data ships this changes permanently: from then on schema changes are **additive only** — a
-new table/index goes in a **new** `db.version(N).stores({...})` block and shipped blocks are
-never edited again. `db.js` calls out where that first `version(2)` block should be added.
+The `version(1)` block is edited **in place**: add or change a table or index right in that
+block, then reconcile the change with **Reset App to Start** + re-seed — schema and seed data
+move together, and there is no separate migration path.
 
 ---
 
@@ -298,9 +293,7 @@ Notable repo specifics:
 - **kennelRepo**: `preferred_tests`/`preferred_breeds` authoring (dedupe-on-write;
   remove drops membership only, never purges a token another event may need);
   `getVocabulary`/`getBreedVocabulary` union over own-kennels.
-- **expenseRepo**: `getForSubject`, `getByEvent`/`getOneByEvent`, `total(rows)`, and the
-  one-time `migrateEventCosts()` (folds any legacy `Event.cost` into the ledger, guarded
-  by the `expensesMigrated` settings flag; called from `app.js` boot). See §21.
+- **expenseRepo**: `getForSubject`, `getByEvent`/`getOneByEvent`, and `total(rows)`. See §21.
 - **contactRepo.ensureType(id, type)**: adds a `contact_type` role if missing (no-op
   otherwise). `saleRepo`/`studServiceRepo` call it on save to auto-tag a
   `referred_by_contact_id` as `buyer_referrer`/`stud_referrer`.
@@ -574,13 +567,13 @@ request durable storage once, then — on a genuinely fresh install (`shouldOffe
 **tour offer** ("Show me around!" / "No thanks, I'll explore"). The two branches:
 - **"Show me around!"** → seed the Thornfield sample data, `startWizard()`, and reload so the
   destination page's `runWizardStep()` picks the tour up. Sample data is seeded **only** on
-  this path — it's no longer a user-facing "explore vs. blank" choice.
+  this path.
 - **"No thanks…"** → `declineSampleData()` (a blank kennel, no sample data ever), a
   **backups + install-as-app** card, then the **New Kennel** kennel-setup modal.
 
 On a non-fresh load the onboarding no-ops and `app.js` falls through to `maybeShowKennelSetupPrompt()`
-(which still fires on the load right after sample data is cleared). `sampleDataUI.js` now owns
-only the persistent banner + the shared Clear-sample-data flow.
+(which fires on the load right after sample data is cleared). `sampleDataUI.js` owns only the
+persistent banner + the shared Clear-sample-data flow.
 
 **Guided tour.** A spotlight coach-mark tour of the seeded Thornfield packet — a pure
 UI/state feature that reads existing records (never writes app data) and persists its own
@@ -953,7 +946,7 @@ single-user/offline/all-local; this adds *recipients*.
   `{startDate, endDate}` scheduled ranges (only the two dates copied — never boarding notes).
   Plus top-level `contracts[]` = the sale's non-archived contracts as `{signedDate,
   documentUrl}` (shell shows the signed date or "Not Signed" + a "View/sign contract here"
-  link; legacy links carry a flat `contractUrls` list the shell still renders). Event history
+  link). Event history
   surfaces a **title + one curated safe field per type** — `vaccination`→`vaccine`,
   `preventative`→`product`, `weight_check`→weight, `milestone`→`description`, `note`→title
   only — **never** the freeform top-level `notes`, and **never** illness/injury/evaluation or
@@ -1255,11 +1248,8 @@ expenses, and the net.
     row-level Adjust modal.
   - **Overview view:** the Net tiles + income/expense breakdown.
 
-### Migration & safety
+### Safety
 
-- `expenseRepo.migrateEventCosts()` folds any pre-existing `Event.cost` into linked expenses
-  once (guarded by the `expensesMigrated` settings flag; run from `app.js` boot; idempotent; a
-  no-op after Reset App since no event then has a cost).
 - **Companion export is safe by construction** — `companionExport.js` is a positive allow-list
   (§20), so `expenses` never appears in any bundle. Financials do not leak.
 - **Hard-delete guards** (§7): an event with a linked expense, and a subject with any expense,
