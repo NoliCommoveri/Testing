@@ -630,6 +630,15 @@ an existing one — you must (1) update `PRECACHE_URLS` and (2) bump `CACHE_NAME
 fetch is cache-first, an installed client only picks up changes when `CACHE_NAME` changes.
 Forgetting to precache a new module silently breaks offline for whatever imports it.
 
+**Bump `CACHE_NAME` ask-first, once per shippable batch — not per edit.** `PRECACHE_URLS`
+always tracks the file set as you go, but the `CACHE_NAME` bump is the *last* step and is
+**not** something to do unprompted: make all the edits, then **ask the user to confirm the
+batch is done** before bumping. In a long multi-turn session a bump every turn just churns
+through versions — so once you've bumped within a session, that pending version **stands**
+for further edits in the same session (it hasn't reached clients yet, so it still represents
+the new set); only re-bump after a deploy actually ships or the user asks for a fresh
+rollover. See CLAUDE.md for the same rule stated as the working checklist.
+
 There is a maintenance check for this — see §16.
 
 ---

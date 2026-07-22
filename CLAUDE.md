@@ -60,17 +60,26 @@ an icon, a `vendor/` or `resources/` asset):
    install and silently breaks offline.
 2. **Bump `CACHE_NAME`** in `KennelOS/sw.js` (e.g. `kennelos-shell-vN` → `vN+1`).
    Without this, clients keep serving the old cache and never see your change.
-   **Only bump after the user confirms there are no more changes** — do it as the
-   final step of a batch of related edits, not once per individual file edit, so a
-   multi-edit session ships as a single cache rollover rather than a churn of bumps.
-   (`PRECACHE_URLS` edits in step 1 are not optional and still land with the edit
-   that changes the file set — this deferral is about `CACHE_NAME` only.)
+   **Never bump on your own initiative — ASK the user to confirm they're done, and
+   bump only after they say so.** One rollover per shippable batch, not per edit.
+   Concretely:
+   - Do all the file/content edits first, leaving `CACHE_NAME` untouched, and when you
+     think the batch is complete **ask** ("Ready to bump the SW cache, or more changes
+     coming?") rather than assuming. We run long multi-turn sessions and a bump per turn
+     churns through versions for no benefit.
+   - Once bumped **within a session, that version stands** — further edits in the same
+     session ride the *same* pending version (it hasn't shipped to clients yet, so it
+     still correctly represents the new file set). Do **not** keep incrementing
+     `vN → vN+1 → vN+2` across turns of one session; re-bump only after a deploy has
+     actually gone out, or the user asks for a fresh rollover.
+   - (`PRECACHE_URLS` edits in step 1 are not optional and still land with the edit
+     that changes the file set — this ask-first rule is about `CACHE_NAME` only.)
 
 There is a sanity check (a short Python snippet) in the End-State guide's invariants
 section that lists any app file missing from the precache and any precache entry with
 no file on disk — run it if you touched the file set. Editing an *existing* file's
-contents still needs the `CACHE_NAME` bump so clients re-fetch it — again, as the
-final confirmed step.
+contents still needs a `CACHE_NAME` bump so clients re-fetch it — but the same ask-first,
+one-bump-per-batch rule applies.
 
 ## Architecture non-negotiables
 - Multi-page static: one `.html` per section, shared JS (`nav.js`/`db.js`/repos). No SPA router.
