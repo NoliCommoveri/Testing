@@ -1,7 +1,8 @@
-// fileRepo.js — the file archive. One row per stored PDF (guide §4.3), analog
-// of Receipts' photoRepo. Every file's mime is 'application/pdf' in normal use
-// — photos are converted to PDF by pdfBuild.js before they ever reach here, so
-// view / dog-pack / backup treat every document identically.
+// fileRepo.js — the document file archive: one row per stored PDF, blob +
+// thumbnail + meta. Every file's mime is 'application/pdf' in normal use —
+// photos are converted to a compressed PDF by pdfBuild.js before they ever
+// reach here, so viewing/downloading a document treats every file identically
+// regardless of whether it started as an upload or a camera capture.
 import { db } from './db.js';
 
 export const fileRepo = {
@@ -40,12 +41,6 @@ export const fileRepo = {
 
   async remove(id) {
     if (id) await db.files.delete(id);
-  },
-
-  // Every file row, for backup export. Includes the Blob — caller streams it
-  // into the archive rather than holding many in memory at once where it can.
-  async getAll() {
-    return db.files.toArray();
   },
 
   // Metadata only (no blob) — for the document list, which needs a file's

@@ -13,12 +13,13 @@ import Dexie from '../vendor/dexie.min.mjs';
 export const db = new Dexie('KennelOSBreedingApp');
 
 // --- Schema ---------------------------------------------------------------
-// Data Model Architecture Proposal v3 §2 collapses the version ladder into a
-// SINGLE version(1) block covering all ten tables. That ladder only exists to
+// Fresh repo, no shipped data yet — schema starts collapsed at a SINGLE
+// version(1) block covering all ten tables. That ladder only exists to
 // protect real-data migrations, and nothing has shipped — there is no live data
-// to migrate, so this is a deliberate, documented reset. The NEXT `.version(2)` block
-// should be added only at the first real release; from then on, additive
-// versioning applies as Dexie expects and this block is never edited again.
+// to migrate, so this block absorbs every change and is edited in place. The
+// first `.version(2)` block should be added only at the first real release;
+// from then on, additive versioning applies as Dexie expects and this block
+// is never edited again.
 //
 // Index notes:
 //  - events '[subject_type+subject_id]' is a COMPOUND index, required for fast
@@ -32,16 +33,12 @@ export const db = new Dexie('KennelOSBreedingApp');
 //    persist, they just aren't indexed. `events.event_end_date` (Stage 4.5) is a
 //    deliberate example: a plain nullable YYYY-MM-DD field, never queried/sorted
 //    on directly, so it carries no index (Stage4.5 Addendum §C1).
-//  - events '.reminder_date' (Stage 5, Build Brief §3.2) IS indexed: the reminder
-//    engine's getReminders() range-probes it. This is the ONE index Stage 5 adds,
-//    and the last one that gets to ride an edit to this collapsed version(1) block
-//    (nothing has shipped — reconcile by Reset App + re-seed, no `.version(2)`).
-//    Every further index after the first real release goes in an additive
-//    `.version(2)` block that is never edited again (Build Brief §8).
-//  - Stage 5 also adds two PLAIN fields — `events.reminder_dismissed` (boolean)
-//    and `dogs.recorded_coi` (object) — that are deliberately UNindexed: they
-//    persist and ride the JSON backup, but nothing queries them by key, so they
-//    stay out of the index strings below (Build Brief §2.1/§3.2).
+//  - events '.reminder_date' IS indexed: the reminder engine's getReminders()
+//    range-probes it. Every further index after the first real release goes
+//    in an additive `.version(2)` block that is never edited again.
+//  - `events.reminder_dismissed` (boolean) and `dogs.recorded_coi` (object) are
+//    deliberately UNindexed: they persist and ride the JSON backup, but nothing
+//    queries them by key, so they stay out of the index strings below.
 //  - `dogs.breeder_kennel_id` (FK → Kennel, the kennel that produced this dog —
 //    distinct from `kennel_id`, which of the user's own kennels the dog belongs
 //    to now) is indexed like every other canonical Dog FK, and guarded in
@@ -61,6 +58,24 @@ export const db = new Dexie('KennelOSBreedingApp');
 //    event/timeline just query it back (expenseRepo.getByEvent) — Event no longer
 //    stores a `cost` field. Indexed on event_id (fast "cost for this event"),
 //    category (report filter), and expense_date (report range).
+//  - litters.`foster_partner_contact_id` is a per-litter foster fact (the same
+//    dam can have more than one foster litter, so it can't live on the Dog):
+//    indexed because the referential guard (CONTACT_REFERENCES) probes it so a
+//    foster partner contact can't be hard-deleted out from under a litter.
+//    `foster_direction` and the split fields (`foster_our_share_pct`,
+//    `foster_split_basis`, `foster_split_notes`) are plain unindexed fields
+//    (filtered in JS, like is_archived) and so are NOT listed.
+//  - `documents` is a filed document (pedigree/health test/registration/contract/
+//    other) belonging to exactly one dog and pointing at exactly one stored
+//    `files` row (documentRepo.js). Indexed on dog_id (a dog's document list),
+//    doc_type (the type filter chips), and doc_date (newest-first sort).
+//  - `files` is the blob archive backing `documents` AND `expenses.receipt_file_id`
+//    — the bytes of an uploaded PDF, or a photo/screenshot converted to a
+//    compressed PDF client-side (data/pdfBuild.js), never queried by anything
+//    but id, so only `created_at` (backup ordering) is indexed alongside it.
+//  - `expenses.receipt_file_id` (assets/receiptCapture.js) is a plain,
+//    unindexed FK into `files` — same posture as `vendor`/`notes`, fetched by
+//    id only, never queried/filtered on.
 db.version(1).stores({
   dogs:          'id, sire_id, dam_id, litter_id, breeder_kennel_id, owner_contact_id, *co_owner_contact_ids, status, ownership_type, sex, breed, kennel_id, is_archived',
   events:        'id, [subject_type+subject_id], event_type, event_date, reminder_date, related_dog_id, related_contact_id, is_archived',
@@ -68,29 +83,12 @@ db.version(1).stores({
   contacts:      'id, kennel_id, waitlist_status, is_archived',
   kennels:       'id, is_archived',
   pairings:      'id, sire_id, dam_id, status, pairing_type, is_archived',
-  litters:       'id, pairing_id, sire_id, dam_id, status, whelp_date, is_archived',
+  litters:       'id, pairing_id, sire_id, dam_id, status, whelp_date, foster_partner_contact_id, is_archived',
   sales:         'id, dog_id, buyer_contact_id, referred_by_contact_id, status, placement_type, is_archived',
   contracts:     'id, contract_type, status, related_sale_id, related_stud_service_id, related_dog_id, related_contact_id, is_archived',
-  stud_services: 'id, our_dog_id, partner_dog_id, partner_contact_id, referred_by_contact_id, direction, status, pairing_id, is_archived'
-});
-
-// --- version(2): foster whelps (additive) ---------------------------------
-// The FIRST additive version block past the collapsed version(1) above. Foster
-// is a per-litter fact (the same dam can have more than one foster litter, so it
-// can't live on the Dog): a litter carries a nullable `foster_direction`
-// (foster_in / foster_out) plus the counterparty `foster_partner_contact_id`
-// (the dam's owner for foster-in, the caretaker for foster-out) and its split
-// terms. Only `foster_partner_contact_id` is INDEXED here — the referential guard
-// (CONTACT_REFERENCES) probes it so a foster partner contact can't be
-// hard-deleted out from under a litter. `foster_direction` and the split fields
-// (`foster_our_share_pct`, `foster_split_basis`, `foster_split_notes`) are plain
-// unindexed fields (filtered in JS, like is_archived) and so are NOT listed.
-//
-// Per the versioning rule (CLAUDE.md / guide §5): from here on, schema changes
-// are additive-only — new version(N) blocks, and version(1) above is FROZEN.
-// Dexie inherits every unchanged table, so only `litters` is redeclared.
-db.version(2).stores({
-  litters: 'id, pairing_id, sire_id, dam_id, status, whelp_date, foster_partner_contact_id, is_archived'
+  stud_services: 'id, our_dog_id, partner_dog_id, partner_contact_id, referred_by_contact_id, direction, status, pairing_id, is_archived',
+  documents:     'id, dog_id, doc_type, doc_date, is_archived',
+  files:         'id, created_at'
 });
 
 // --- First-run storage durability ----------------------------------------

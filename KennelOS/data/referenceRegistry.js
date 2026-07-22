@@ -45,7 +45,8 @@ export const DOG_REFERENCES = [
   {
     table: 'expenses', field: 'subject_id', label: 'subject of an expense',
     compoundIndex: '[subject_type+subject_id]', discriminatorValue: 'dog'
-  }
+  },
+  { table: 'documents', field: 'dog_id', label: 'has a filed document' }
 ];
 
 // --- Litter: what can point at a Litter (Data Model v3 §10) -----------------
@@ -128,6 +129,12 @@ export const EVENT_REFERENCES = [
 // --- Expense: a leaf entity — nothing points at an Expense. Its own FKs
 // (event_id, subject_id) point OUTWARD and are guarded on those targets above.
 export const EXPENSE_REFERENCES = [];
+
+// --- Document: a leaf entity — nothing points at a Document. Its own FK
+// (dog_id) points OUTWARD and is guarded on Dog above (DOG_REFERENCES). Its
+// file_id is not a referenceRegistry entry — a file is owned by exactly one
+// document and is deleted alongside it (documentRepo.hardDelete), not guarded.
+export const DOCUMENT_REFERENCES = [];
 
 // Count rows matching one registry entry for the given target id.
 async function countReferences(ref, id) {

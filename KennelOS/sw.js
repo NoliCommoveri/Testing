@@ -6,7 +6,7 @@
 // never re-fetches a stale precached file on its own; only a CACHE_NAME change
 // (which changes these bytes, so the browser detects a new service worker,
 // installs it, and purges the old cache in `activate`) rolls it over.
-const CACHE_NAME = 'kennelos-shell-v91';
+const CACHE_NAME = 'kennelos-shell-v2';
 
 const PRECACHE_URLS = [
   './',
@@ -27,6 +27,7 @@ const PRECACHE_URLS = [
   'assets/onboardingUI.js',
   'assets/pedigree.js',
   'assets/puppyForm.js',
+  'assets/receiptCapture.js',
   'assets/reportView.js',
   'assets/sampleDataUI.js',
   'assets/timeline.js',
@@ -47,10 +48,12 @@ const PRECACHE_URLS = [
   'data/csvImport.js',
   'data/dateUtils.js',
   'data/db.js',
+  'data/documentRepo.js',
   'data/dogRepo.js',
   'data/dropbox.js',
   'data/eventRepo.js',
   'data/expenseRepo.js',
+  'data/fileRepo.js',
   'data/importExport.js',
   'data/incomeView.js',
   'data/kennelRepo.js',
@@ -59,9 +62,9 @@ const PRECACHE_URLS = [
   'data/litterRepo.js',
   'data/nudges.js',
   'data/nudgeState.js',
+  'data/ocr.js',
   'data/pairingRepo.js',
-  'data/papersDropbox.js',
-  'data/papersSnapshot.js',
+  'data/pdfBuild.js',
   'data/referenceRegistry.js',
   'data/repoBase.js',
   'data/saleRepo.js',
@@ -70,7 +73,6 @@ const PRECACHE_URLS = [
   'data/settings.js',
   'data/studServiceRepo.js',
   'data/vocab.js',
-  'data/zip.js',
   'data/wizardState.js',
   'data/wizardSteps.js',
   'pages/active-breeding.html',
@@ -171,6 +173,10 @@ const PRECACHE_URLS = [
   'vendor/dexie.min.mjs',
   'vendor/lz-string.min.mjs',
   'vendor/papaparse.min.mjs',
+  'vendor/tesseract/eng.traineddata.gz',
+  'vendor/tesseract/tesseract-core-simd-lstm.wasm.js',
+  'vendor/tesseract/tesseract.esm.min.js',
+  'vendor/tesseract/worker.min.js',
   'resources/common_tests_by_breed_seed.csv'
 ];
 

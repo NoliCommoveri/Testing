@@ -404,6 +404,43 @@ export const EXPENSE_SUBJECT_TYPES = [
   { value: 'kennel',  label: 'Kennel' }
 ];
 
+// --- Documents (dog-scoped filed files: pedigree/health test/registration/
+// contract/other) ------------------------------------------------------------
+export const DOC_TYPES = [
+  { value: 'pedigree',     label: 'Pedigree',     badge: 'badge-green' },
+  { value: 'health_test',  label: 'Health test',  badge: 'badge-blue' },
+  { value: 'registration', label: 'Registration', badge: 'badge-neutral' },
+  { value: 'contract',     label: 'Contract',     badge: 'badge-purple' },
+  { value: 'other',        label: 'Other',        badge: 'badge-gray' }
+];
+
+// Which optional fields (beyond title/doc_date/notes, which every type shows)
+// appear on the add/edit form for a given doc_type.
+const DOC_FIELDS_BY_TYPE = {
+  pedigree:     ['issuer_or_lab', 'registry', 'registration_number'],
+  health_test:  ['issuer_or_lab', 'result'],
+  registration: ['issuer_or_lab', 'registry', 'registration_number'],
+  contract:     ['issuer_or_lab'],
+  other:        ['issuer_or_lab']
+};
+
+export function documentFieldsFor(docType) {
+  return DOC_FIELDS_BY_TYPE[docType] || DOC_FIELDS_BY_TYPE.other;
+}
+
+// A small emoji icon per type, for the list when a document has no photo
+// thumbnail (uploaded PDFs).
+const DOC_TYPE_ICON = {
+  pedigree: '🌳',
+  health_test: '🩺',
+  registration: '📜',
+  contract: '✍️',
+  other: '📄'
+};
+export function docTypeIcon(value) {
+  return DOC_TYPE_ICON[value] || '📄';
+}
+
 // Suggested default category when a cost is captured from an event, keyed by
 // event_type. Only a starting point — the event form's category dropdown lets
 // the user override before saving. Anything unmapped defaults to 'other'.

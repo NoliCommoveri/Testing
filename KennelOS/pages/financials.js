@@ -28,6 +28,7 @@ import { getIncomeRows, summarize, incomeLineItems } from '../data/incomeView.js
 import { getInvoiceDefaults, setInvoiceDefaults } from '../data/settings.js';
 import { createReportView } from '../assets/reportView.js';
 import { buildMileageFields, wireMileageMode } from '../assets/expensePanel.js';
+import { buildReceiptField, wireReceiptField } from '../assets/receiptCapture.js';
 import { esc, badge, fmtDate, fmtMoney, todayYMD, param } from '../assets/ui.js';
 import {
   EXPENSE_CATEGORIES, EXPENSE_SUBJECT_TYPES, INCOME_SOURCE_TYPES, INCOME_COMPONENTS,
@@ -134,6 +135,7 @@ function openAddExpense(onSaved) {
         <div class="field"><label>Receipt #</label>
           <input id="af-receipt" type="text" placeholder="e.g. R-0007 (ties to a photo receipt)"></div>
         <div class="field field-wide"><label>Notes</label><textarea id="af-notes"></textarea></div>
+        ${buildReceiptField('af', {})}
       </div>
       <div id="af-error"></div>
       <div class="form-actions">
@@ -147,11 +149,15 @@ function openAddExpense(onSaved) {
   const subjSel = modal.querySelector('#af-subject-id');
   typeSel.addEventListener('change', () => { subjSel.innerHTML = subjectOptionsFor(typeSel.value); });
   const mileage = wireMileageMode(modal, 'af', modal.querySelector('#af-category'));
+  const receipt = wireReceiptField(modal, 'af', {});
 
   function close() { overlay.remove(); document.removeEventListener('keydown', onKey); }
   function onKey(e) { if (e.key === 'Escape') close(); }
   async function save() {
+    const saveBtn = modal.querySelector('[data-act="save"]');
+    saveBtn.disabled = true;
     try {
+      const receipt_file_id = await receipt.resolveFileId(null);
       const saved = await expenseRepo.create({
         subject_type: typeSel.value,
         subject_id: subjSel.value,
@@ -159,12 +165,15 @@ function openAddExpense(onSaved) {
         vendor: modal.querySelector('#af-vendor').value.trim(),
         receipt_number: modal.querySelector('#af-receipt').value.trim(),
         notes: modal.querySelector('#af-notes').value,
+        receipt_file_id,
         ...mileage.payloadBits()
       });
       close();
       onSaved?.(saved);
     } catch (e) {
       modal.querySelector('#af-error').innerHTML = `<div class="inline-error">${esc(e.message || String(e))}</div>`;
+    } finally {
+      saveBtn.disabled = false;
     }
   }
   modal.querySelector('[data-act="save"]').addEventListener('click', save);
@@ -231,6 +240,7 @@ function initExpenses() {
       { header: 'Subject', value: (x) => subjectLabel(x) },
       { header: 'Vendor', value: (x) => x.vendor || '' },
       { header: 'Receipt #', value: (x) => x.receipt_number || '' },
+      { header: 'File', value: (x) => x.receipt_file_id ? '📎' : '', csv: (x) => x.receipt_file_id ? 'yes' : '' },
       { header: 'Notes', value: (x) => x.notes || '' }
     ],
     onRowClick: (x) => {

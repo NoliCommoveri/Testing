@@ -17,9 +17,7 @@ const KEYS = {
   wizardStatus: 'kennelOS.wizardStatus',
   wizardStepIndex: 'kennelOS.wizardStepIndex',
   dropbox: 'kennelOS.dropbox',
-  assistantLastSync: 'kennelOS.assistantLastSync',
-  papersDropbox: 'kennelOS.papersDropbox',
-  papersSnapshot: 'kennelOS.papersSnapshot'
+  assistantLastSync: 'kennelOS.assistantLastSync'
 };
 
 export function getLastBackupDate() {
@@ -305,48 +303,6 @@ export function setDropboxSettings(values) {
 
 export function clearDropboxSettings() {
   localStorage.removeItem(KEYS.dropbox);
-}
-
-// --- Kennel Papers Documents viewer (data/papersDropbox.js + papersSnapshot.js)
-// A SECOND, independent Dropbox connection — to the Kennel Papers app folder, so
-// the Documents page can read that app's backups from inside KennelOS. Kept in a
-// separate namespace from `dropbox` above so the two connections never collide;
-// the Kennel Papers app key itself is hardcoded in data/papersDropbox.js, not
-// here. Same shape/semantics as getDropboxSettings (a null value deletes a key).
-export function getPapersDropboxSettings() {
-  const raw = localStorage.getItem(KEYS.papersDropbox);
-  if (!raw) return {};
-  try { return JSON.parse(raw) || {}; } catch { return {}; }
-}
-
-export function setPapersDropboxSettings(values) {
-  const merged = { ...getPapersDropboxSettings(), ...values };
-  for (const k of Object.keys(merged)) if (merged[k] == null) delete merged[k];
-  localStorage.setItem(KEYS.papersDropbox, JSON.stringify(merged));
-  return merged;
-}
-
-export function clearPapersDropboxSettings() {
-  localStorage.removeItem(KEYS.papersDropbox);
-}
-
-// The Documents viewer's TEXT-ONLY snapshot cache (documents + lean dog/file
-// metadata, no file bytes, no thumbnails) so the grouped list renders offline
-// and instantly. A disposable cache, never the source of truth — Kennel Papers
-// owns the documents. Cleared on Reset App like every other setting.
-export function getPapersSnapshotCache() {
-  const raw = localStorage.getItem(KEYS.papersSnapshot);
-  if (!raw) return null;
-  try { return JSON.parse(raw); } catch { return null; }
-}
-
-export function setPapersSnapshotCache(snapshot) {
-  localStorage.setItem(KEYS.papersSnapshot, JSON.stringify(snapshot));
-  return snapshot;
-}
-
-export function clearPapersSnapshotCache() {
-  localStorage.removeItem(KEYS.papersSnapshot);
 }
 
 // KennelAssistant: when the dog feed was last pulled from Dropbox (ISO string).

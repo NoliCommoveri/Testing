@@ -1,6 +1,9 @@
-// pdfBuild.js — photo(s) -> a single/multi-page PDF, vanilla, no library
-// (guide §8). A PDF can embed a JPEG directly via the DCTDecode filter, so no
-// PDF library is needed: build the byte-accurate PDF ourselves.
+// pdfBuild.js — photo(s) -> a single/multi-page PDF, vanilla, no library. A
+// PDF can embed a JPEG directly via the DCTDecode filter, so no PDF library is
+// needed: build the byte-accurate PDF ourselves. This is the "compress to
+// reduce file size" step for a photo/screenshot upload — downscaling +
+// re-encoding as JPEG keeps a filed document small without a visible quality
+// loss on screen or print.
 //
 // Pipeline per image: createImageBitmap (this also normalizes iPhone
 // HEIC -> decoded bitmap, which matters because raw HEIC doesn't embed
@@ -34,8 +37,8 @@ function canvasToJpegBlob(canvas, quality) {
   });
 }
 
-// files: array of File/Blob image sources (camera capture or library picks).
-// Returns { blob (application/pdf), filename, thumbnail (data-URL) }.
+// files: array of File/Blob image sources (camera capture, screenshot, or
+// library picks). Returns { blob (application/pdf), filename, thumbnail (data-URL) }.
 export async function photosToPdf(files, { title = 'document' } = {}) {
   if (!files || files.length === 0) throw new Error('pdfBuild: at least one photo is required.');
 

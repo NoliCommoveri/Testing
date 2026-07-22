@@ -505,7 +505,7 @@ async function renderHeaderActions() {
     ? 'Referenced as ' + blockers.map((b) => `${b.label} (${b.count})`).join(', ') + ' — archive instead.'
     : 'Permanently delete this record.';
   els.headerActions.innerHTML = `
-    <a class="btn btn-sm" href="documents.html?dog=${encodeURIComponent(d.id)}" title="View this dog's documents kept in Kennel Papers">📄 Documents</a>
+    <a class="btn btn-sm" href="documents.html?dog=${encodeURIComponent(d.id)}" title="View this dog's filed documents">📄 Documents</a>
     <button class="btn btn-sm" id="btn-archive">${archiveLabel}</button>
     <button class="btn btn-danger btn-sm" id="btn-delete"${blockers.length ? ' disabled' : ''} title="${esc(delTitle)}">Delete</button>`;
   document.getElementById('btn-archive').onclick = toggleArchive;

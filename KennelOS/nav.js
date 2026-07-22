@@ -21,7 +21,7 @@ export const NAV_ITEMS = [
 // rather than costing a slot in the main bar.
 export const MORE_ITEMS = [
   { label: 'Reports',       path: 'pages/reports.html' },
-  { label: 'Documents',     path: 'pages/documents.html' }, // read-only viewer of Kennel Papers files (§26)
+  { label: 'Documents',     path: 'pages/documents.html' },
   { label: 'Companion',     path: 'pages/companion.html' },
   { label: 'Import/Export', path: 'pages/import-export.html' }
 ];

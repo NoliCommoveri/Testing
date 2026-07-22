@@ -1095,9 +1095,9 @@ function amtKey(n) {
 // deliberately allowed to be blank (a mileage/trip row carries none), so this
 // joins directly with a NUL separator rather than via nkParts (which rejects
 // every empty part).
-// When a row carries a `receipt_number` (the Receipts companion app stamps one on
-// every entry), that IS the key — the same receipt always maps to the same ledger
-// row, so re-import updates it in place even if its amount/date/subject changed.
+// When a row carries a `receipt_number`, that IS the key — the same receipt
+// always maps to the same ledger row, so re-import updates it in place even
+// if its amount/date/subject changed.
 function expenseNk(subjectType, subjectId, date, amount, category, vendor, receiptNumber) {
   const rn = (receiptNumber || '').trim().toLowerCase();
   if (rn) return `rcpt ${rn}`;

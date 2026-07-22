@@ -154,6 +154,40 @@ export function selectModal({ title, message = '', label = '', options, defaultV
   });
 }
 
+// Read-only PDF viewer modal (Download + Close). Shared by anything that
+// stores a file via data/fileRepo.js — the Documents page and the
+// receipt-attachment widget (assets/receiptCapture.js) — so a stored PDF is
+// always viewed the same way regardless of what it's attached to.
+export function viewPdfModal({ title = 'Document', blob, filename = 'document.pdf' }) {
+  if (!blob) return;
+  const url = URL.createObjectURL(blob);
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" style="max-width:900px;width:96vw;">
+      <div class="row-between" style="align-items:center;">
+        <h2 style="margin:0;font-size:17px;">${esc(title)}</h2>
+        <div class="form-actions" style="margin:0;">
+          <button class="btn" data-act="download">Download</button>
+          <button class="btn" data-act="close">Close</button>
+        </div>
+      </div>
+      <embed src="${url}" type="application/pdf" style="width:100%;height:70vh;margin-top:12px;border:1px solid var(--border,#e2e6ec);border-radius:6px;">
+    </div>`;
+  document.body.appendChild(overlay);
+  const cleanup = () => { overlay.remove(); setTimeout(() => URL.revokeObjectURL(url), 500); };
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(); });
+  overlay.querySelector('[data-act="close"]').addEventListener('click', cleanup);
+  overlay.querySelector('[data-act="download"]').addEventListener('click', () => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
+}
+
 // Collapsible card chrome (Today home cards). `title` is the header HTML
 // (may already include a trailing count span); `bodyHtml` is everything
 // below the header. `isEmpty` starts the card collapsed — the caller

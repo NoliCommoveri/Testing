@@ -1,4 +1,7 @@
 // ocr.js — fully-offline receipt text extraction via the vendored Tesseract.js.
+// Ported from the Receipts app: the "auto-pull-out text" behind the receipt
+// capture widget (assets/receiptCapture.js) — scanning a receipt photo
+// pre-fills amount/date/vendor on the expense form instead of typing them.
 //
 // Progressive enhancement: everything is lazy — Tesseract (≈7 MB) only loads the
 // first time you actually scan, and every failure path degrades to manual entry
