@@ -78,7 +78,15 @@ KennelOS/
     repoBase.js                makeRepo factory (shared repo surface)
     referenceRegistry.js       FK declarations + hard-delete guard
     dogRepo / contactRepo / kennelRepo / pairingRepo / litterRepo /
-      saleRepo / contractRepo / studServiceRepo / eventRepo / expenseRepo   Entity repos
+      saleRepo / contractRepo / studServiceRepo / eventRepo / expenseRepo /
+      documentRepo   Entity repos
+    fileRepo.js                The file archive: one row per stored PDF (blob +
+                               thumbnail + meta) backing Documents + expense receipts (§26.1)
+    pdfBuild.js                Photo(s) -> compressed multi-page PDF, no library
+                               (JPEG via DCTDecode); the compress step for a
+                               camera/screenshot upload (§26.1)
+    ocr.js                     Offline receipt OCR (vendored Tesseract) — pre-fills
+                               amount/date/vendor/receipt # on the expense form (§26.1)
     incomeView.js              Derived income aggregator (Sale + outgoing StudService)
     litterFinances.js          Derived per-litter P&L (income vs cost)
     dateUtils.js               todayYMD / date helpers (single "what is today")
@@ -90,12 +98,6 @@ KennelOS/
     assistantSync.js           Owner-side Dropbox flows: backup push/pull,
                                assistant feed builder, outbox import (§26)
     assistantStore.js          KennelAssistant's OWN Dexie db + its data layer (§26)
-    papersDropbox.js           SECOND Dropbox client — reads the Kennel Papers app
-                               folder for the Documents viewer (§26.1)
-    papersSnapshot.js          Downloads/unzips the newest Kennel Papers backup in
-                               memory; text-only list cache; no DB writes (§26.1)
-    zip.js                     Store-only ZIP reader/writer (readZip), for reading
-                               a Kennel Papers backup .zip (§26.1)
     appReset.js                Full "reset to first run" teardown
     sampleData.js              "Thornfield Kennels" demo seed/clear
     seedImport.js              Optional breed+test vocabulary seed
@@ -123,6 +125,8 @@ KennelOS/
     kennelSetupUI.js           Kennel-setup prompt/wizard + seed prefill
     wizardUI.js                Guided-tour overlay/spotlight/cards + resume pill (§11)
     expensePanel.js            Reusable per-subject expense ledger panel (§21)
+    receiptCapture.js          Shared "attach a receipt" widget for both expense
+                               forms — photo/screenshot (OCR + compress) or PDF (§26.1)
   pages/                       One .js + .html per screen (see §13 catalog)
 ```
 
@@ -143,12 +147,14 @@ commonly blank at entry time.
 | **Contact** | `name` | `contact_type[]` (multi), `email`, `phone`, `address`, `kennel_id`, `waitlist_status`, `first_contact_source`, `notes`, `companion_note` (plain, unindexed — a per-recipient message **meant for the recipient's eyes**, shown on their companion share page; deliberately distinct from the private `notes`; §20). Buyers are Contacts — **there is no Buyer table**. `address` also resolves an in-person stud service's away-board location (§19). |
 | **Kennel** | `kennel_name` | `is_own_kennel`, `prefix`, `location`, `website` (plain, unindexed — a link for this kennel, mirrors `Dog.url`), `logo_data_url` (plain, unindexed — a downscaled PNG/SVG **data URL** for the kennel's logo, uploaded/removed on the kennel detail page, rendered on its invoices/receipts (§24) and puppy records (§23); rides the JSON backup), `preferred_tests[]`, `preferred_breeds[]`, `promote_nudge_enabled` (bool, default off), `promote_age_male_months`/`promote_age_female_months` (the promote-lifecycle nudge's per-kennel thresholds, §19). Lightweight; added inline from the Contact form. |
 | **Pairing** | `sire_id`, `dam_id`, `pairing_type`, `status` | `method`, `planned_date` (shown as "Planned first date" — the first planned/tie date), `last_observed_date` (plain, unindexed — a subsequent observed tie/breeding date), `expected_due_date` (prefilled on the detail page as 63 days after `planned_date` when still empty, never clobbering a deliberate edit), `notes`. Sire ≠ dam (hard block). |
-| **Litter** | `dam_id`, `sire_id`, `status` | `nickname` (plain, unindexed — optional friendly label, e.g. "Party of Five"; when set it leads the detail-page title and shows as its own column on the Litters list and report, searchable across all three; falls back to `dam × sire` when blank), `pairing_id`, `whelp_date`, `accept_deposits_date` (plain, unindexed — when the breeder begins accepting deposits; on the detail page it sits between `whelp_date` and `estimated_ready_date`, and surfaces in the **prospective** companion bundle between "Born" and "Estimated ready" when set, §20), `estimated_ready_date` (plain, unindexed — prefilled as 8 weeks/56 days after `whelp_date` when still empty, never clobbering a deliberate edit), `litter_registration_number`, `puppies_born_total/alive/deceased/abnormalities` (the last a count, not mutually exclusive with alive/deceased), `expected_price_male`/`expected_price_female`/`expected_deposit_male`/`expected_deposit_female` (plain, unindexed — per-litter defaults, grouped by sex on the detail page; `sale.js` prefills a new Sale's `price` and `deposit_amount` from the matching-sex pair by the puppy's `sex`, only into fields still empty), `foster_direction` (plain, unindexed — nullable `foster_in`/`foster_out`; null = an ordinary litter. **Foster is a per-litter fact** (guide §25): the same dam can have foster and non-foster litters, so it can't live on the Dog. A foster puppy is distinguished from a plain "external" dog purely by DERIVATION of its litter's `foster_direction` — it stays a normal `status='puppy'` Dog we manage and sell), `foster_partner_contact_id` (**indexed FK → Contact**, `version(2)`; the counterparty — the dam's owner for foster-in, the caretaker for foster-out — guarded in `CONTACT_REFERENCES`; its `kennel_id` is the owner/caretaker kennel a companion share can reveal), `foster_comp_model` (plain, unindexed — `income_split`/`flat_per_pup`; how the partner is paid), `foster_our_share_pct`/`foster_split_basis` (the income-split terms), `foster_flat_fee_per_pup` (the per-pup flat fee), `foster_split_notes` (all plain, unindexed — documentation of the terms for either model; the actual payout to the other party is a real `foster_split` ("Foster compensation") Expense, never a stored derived number), `notes`. The litter's own sire/dam are authoritative. Puppy roster is **derived** (`Dog WHERE litter_id`). |
+| **Litter** | `dam_id`, `sire_id`, `status` | `nickname` (plain, unindexed — optional friendly label, e.g. "Party of Five"; when set it leads the detail-page title and shows as its own column on the Litters list and report, searchable across all three; falls back to `dam × sire` when blank), `pairing_id`, `whelp_date`, `accept_deposits_date` (plain, unindexed — when the breeder begins accepting deposits; on the detail page it sits between `whelp_date` and `estimated_ready_date`, and surfaces in the **prospective** companion bundle between "Born" and "Estimated ready" when set, §20), `estimated_ready_date` (plain, unindexed — prefilled as 8 weeks/56 days after `whelp_date` when still empty, never clobbering a deliberate edit), `litter_registration_number`, `puppies_born_total/alive/deceased/abnormalities` (the last a count, not mutually exclusive with alive/deceased), `expected_price_male`/`expected_price_female`/`expected_deposit_male`/`expected_deposit_female` (plain, unindexed — per-litter defaults, grouped by sex on the detail page; `sale.js` prefills a new Sale's `price` and `deposit_amount` from the matching-sex pair by the puppy's `sex`, only into fields still empty), `foster_direction` (plain, unindexed — nullable `foster_in`/`foster_out`; null = an ordinary litter. **Foster is a per-litter fact** (guide §25): the same dam can have foster and non-foster litters, so it can't live on the Dog. A foster puppy is distinguished from a plain "external" dog purely by DERIVATION of its litter's `foster_direction` — it stays a normal `status='puppy'` Dog we manage and sell), `foster_partner_contact_id` (**indexed FK → Contact**; the counterparty — the dam's owner for foster-in, the caretaker for foster-out — guarded in `CONTACT_REFERENCES`; its `kennel_id` is the owner/caretaker kennel a companion share can reveal), `foster_comp_model` (plain, unindexed — `income_split`/`flat_per_pup`; how the partner is paid), `foster_our_share_pct`/`foster_split_basis` (the income-split terms), `foster_flat_fee_per_pup` (the per-pup flat fee), `foster_split_notes` (all plain, unindexed — documentation of the terms for either model; the actual payout to the other party is a real `foster_split` ("Foster compensation") Expense, never a stored derived number), `notes`. The litter's own sire/dam are authoritative. Puppy roster is **derived** (`Dog WHERE litter_id`). |
 | **Sale** | `dog_id`, `buyer_contact_id`, `placement_type`, `status` | `sale_date`, `price`, `deposit_amount`, `deposit_date`, `balance_due_date`, `balance_paid_date`, `transport_fee` (plain, unindexed — a flat delivery/transport charge, decimal), `deferred_boarding_amount`/`deferred_boarding_frequency`/`deferred_boarding_duration_days` (plain, unindexed — a boarding rate for a buyer who delayed pickup: decimal amount + `BOARDING_FREQUENCY_OPTIONS` Day/Week/Month + a free-text **count of frequency units** (despite the `_days` name, the value is the number of units — `2` with frequency `Week` means two weeks), rendered as "amount per frequency × count"; the family companion bundle multiplies `amount × count` into a deferred-pickup total feeding the computed remaining balance (§20); never cents, never an Expense — see §21), `lead_source`, `referred_by_contact_id` (indexed FK → the Contact who referred this buyer; `CONTACT_REFERENCES`; on save `saleRepo` auto-tags that contact `buyer_referrer` via `contactRepo.ensureType`), `payment_method`/`payment_reference`/`invoice_number`/`invoice_notes` (plain, unindexed — invoice/receipt document fields set from the Financials generator modal; §24), `notes`. On the detail page (`sale.js`) all fee fields render/edit above all date fields. Its own table (not a Dog field) so reserve/return/re-place stay distinct facts. |
 | **Contract** | `contract_type` | `status` (defaults `draft`), `related_sale_id`, `related_stud_service_id`, `related_dog_id` (canonical Dog link, used only for `lease`/`co_own`/`foster`/`other` types — where no linked Sale/StudService reaches a dog; forced `null` for other types via `contractRepo.DOG_LINK_TYPES`/`normalizeLinks`), `related_contact_id` (canonical counterparty link — lessee/co-owner/partner/foster owner — for the same `lease`/`co_own`/`foster`/`other` types via `CONTACT_LINK_TYPES`; sale/stud contracts reach their counterparty through the linked Sale/StudService, so it stays `null` there; scopes a contract into the **partner** companion bundle, §20), `document_url` (plain, unindexed — a share link to the signed document, e.g. a Drive "anyone with the link" URL; carried as a *pointer* into the buyer bundle, §20), `signed_date`, `lease_start_date`/`lease_end_date` (lease type; UI shows them and hides Related sale/stud fields when `contract_type='lease'`), `title`, `terms_summary`, `notes`. Generic across sale/stud/co-ownership/lease. Leaf for its own hard-delete (nothing points *at* a contract), but it points *at* its Dog via `related_dog_id` (guarded under `DOG_REFERENCES`) and its counterparty via `related_contact_id` (guarded under `CONTACT_REFERENCES`). |
 | **StudService** | `direction`, `our_dog_id`, `partner_dog_id`, `partner_contact_id`, `status` | `pairing_id`, `fee_amount`, `fee_structure`, `pick_status` (plain, unindexed — suggested `pending`/`claimed`, free text allowed; meaningful **only** when `fee_structure ∈ {pick_of_litter, flat_plus_pick}`, forced `null` otherwise; feeds the partner companion bundle's compensation, §20), `pick_value_amount` (plain, unindexed decimal — the breeder's own estimated dollar value of the pick puppy, for income tracking; gated the same way as `pick_status`; deliberately **separate** from `fee_amount` (the actual cash); internal only — never in the partner bundle), `result_notes`, `type` (`in_person`/`ai` — coarse physical-travel flag; `in_person` + `sent_date`/`returned_date` window feeds the away-board, §19), `referred_by_contact_id` (indexed FK → the referring Contact; `CONTACT_REFERENCES`; on save `studServiceRepo` auto-tags `stud_referrer` via `contactRepo.ensureType`), `payment_method`/`payment_reference`/`invoice_number`/`invoice_notes` (plain, unindexed — invoice/receipt document fields, mirroring Sale's; only the outgoing direction is invoiceable, since incoming stud is an expense; §24), plus optional logistics dates. Covers both `incoming` and `outgoing`. |
 | **Event** | `subject_type`, `subject_id`, `event_type`, `event_date`, `title` | `event_end_date`, `reminder_date`, `reminder_dismissed`, `related_dog_id`, `related_contact_id`, `details{}`, `notes`. See §8. **No `cost` field** — a cost entered on the event form is written to the Expense ledger (`expenses.event_id` = the event) and read back via `expenseRepo.getByEvent`; see the Expense row and §21. |
-| **Expense** | `subject_type` (`dog`/`litter`/`pairing`/`kennel`), `subject_id`, `amount`, `category`, `expense_date` | `event_id` (nullable FK → the Event a cost was captured from — the one canonical event↔cost link; reverse is `expenseRepo.getByEvent`), `miles`/`mileage_rate` (plain, unindexed — a **mileage** expense: when `miles` is set, `amount` is **derived** = `miles × mileage_rate` in `expenseRepo.normalize`, never entered directly; both null on a flat expense. Default rate prefilled from `settings.getMileageDefaults()`; §21), `vendor`, `receipt_number` (plain, unindexed — a human-facing receipt/reference number that ties a ledger row back to a paper/photo receipt, e.g. the number the Receipts companion app stamps on each capture; shown/edited on both expense forms and the Financials ledger, searchable there, and the idempotent key on CSV re-import when present, §9), `reimbursable`/`reimbursed_date` (plain, unindexed — a cost owed back to you, e.g. a foster-in rearing cost the dam's owner reimburses; `reimbursed_date` records when it was settled, and a set date coerces `reimbursable=true`. Litter P&L nets a reimbursed reimbursable out of your cost and lists a pending one as a receivable — §21/§25. "Reimbursable to whom" is derived from the litter's foster partner, so no per-expense contact FK), `notes`. The Financials ledger: the single home for money spent. Polymorphic like Event; `kennel`-subject rows are kennel-wide overhead. Leaf entity (`EXPENSE_REFERENCES` empty). See §21. |
+| **Expense** | `subject_type` (`dog`/`litter`/`pairing`/`kennel`), `subject_id`, `amount`, `category`, `expense_date` | `event_id` (nullable FK → the Event a cost was captured from — the one canonical event↔cost link; reverse is `expenseRepo.getByEvent`), `miles`/`mileage_rate` (plain, unindexed — a **mileage** expense: when `miles` is set, `amount` is **derived** = `miles × mileage_rate` in `expenseRepo.normalize`, never entered directly; both null on a flat expense. Default rate prefilled from `settings.getMileageDefaults()`; §21), `vendor`, `receipt_number` (plain, unindexed — a human-facing receipt/reference number printed on the receipt, not an id of anything in KennelOS; auto-filled by OCR off a scanned receipt when found (§26.1) and editable, shown/edited on both expense forms and the Financials ledger, searchable there, and the idempotent key on CSV re-import when present, §9), `receipt_file_id` (plain, unindexed FK → the `files` row holding the attached receipt — a photo/screenshot compressed to PDF, or an uploaded PDF, attached via the receipt-capture widget; deleted with the expense in `expenseRepo.hardDelete`; §26.1), `reimbursable`/`reimbursed_date` (plain, unindexed — a cost owed back to you, e.g. a foster-in rearing cost the dam's owner reimburses; `reimbursed_date` records when it was settled, and a set date coerces `reimbursable=true`. Litter P&L nets a reimbursed reimbursable out of your cost and lists a pending one as a receivable — §21/§25. "Reimbursable to whom" is derived from the litter's foster partner, so no per-expense contact FK), `notes`. The Financials ledger: the single home for money spent. Polymorphic like Event; `kennel`-subject rows are kennel-wide overhead. Leaf entity (`EXPENSE_REFERENCES` empty). See §21. |
+| **Document** | `dog_id`, `doc_type` (`pedigree`/`health_test`/`registration`/`contract`/`other`), `file_id` | `title`, `doc_date`, `issuer_or_lab`, `result`, `registry`, `registration_number`, `notes`. A filed document belonging to exactly one Dog (`dog_id`, guarded in `DOG_REFERENCES`) and pointing at exactly one stored `files` row (`file_id`) — the reverse "a dog's documents" is `documentRepo.getByDog`. Which optional fields show on the form is keyed by `doc_type` (`vocab.documentFieldsFor`). Leaf entity (`DOCUMENT_REFERENCES` empty); `hardDelete` also removes the linked file. See §26.1. |
+| **File** (`files`) | `blob`, `mime`, `filename`, `size`, `created_at` | `thumbnail` (a small JPEG data-URL for photo-sourced files; blank for uploaded PDFs, which show a doc-type icon). The blob archive behind **both** Documents (`documents.file_id`) and expense receipts (`expenses.receipt_file_id`) — every file is a PDF (photos are compressed to PDF by `pdfBuild.js` before storage). Fetched by id only; not an orphan-guarded entity — a file is owned by its one Document/Expense and deleted with it. `blob` is base64-round-tripped through backups (§5). See §26.1. |
 
 ### 4.2 Relationship direction — the sixth design principle
 
@@ -184,7 +190,7 @@ When you need "the reverse of X," write a query. Do not add a mirror field.
 
 ## 5. Dexie schema (`data/db.js`)
 
-DB name: `KennelOSBreedingApp`. All ten tables live in a **single collapsed
+DB name: `KennelOSBreedingApp`. All twelve tables live in a **single collapsed
 `version(1)` block**. Indexes:
 
 ```
@@ -199,13 +205,15 @@ contacts:      id, kennel_id, waitlist_status, is_archived
 kennels:       id, is_archived
 pairings:      id, sire_id, dam_id, status, pairing_type, is_archived
 litters:       id, pairing_id, sire_id, dam_id, status, whelp_date,
-               foster_partner_contact_id, is_archived        ← foster_partner_contact_id added in version(2)
+               foster_partner_contact_id, is_archived
 sales:         id, dog_id, buyer_contact_id, referred_by_contact_id, status,
                placement_type, is_archived
 contracts:     id, contract_type, status, related_sale_id,
                related_stud_service_id, related_dog_id, related_contact_id, is_archived
 stud_services: id, our_dog_id, partner_dog_id, partner_contact_id,
                referred_by_contact_id, direction, status, pairing_id, is_archived
+documents:     id, dog_id, doc_type, doc_date, is_archived
+files:         id, created_at
 ```
 
 Index notes:
@@ -216,34 +224,38 @@ Index notes:
 - `sales.referred_by_contact_id` and `stud_services.referred_by_contact_id` are the
   referral FKs, guarded in `CONTACT_REFERENCES`.
 - `dogs.*co_owner_contact_ids` is a **multi-entry** index ("dogs co-owned by X").
+- `documents` (§26.1) is indexed on `dog_id` (a dog's document list), `doc_type`
+  (the type filter chips), and `doc_date` (newest-first sort). `files` — the blob
+  archive backing both Documents and `expenses.receipt_file_id` — is fetched only by
+  id, so only `created_at` (backup ordering) is indexed. `expenses.receipt_file_id`
+  is a **plain, unindexed** FK into `files` (fetched by id only, never queried on).
 - `events.reminder_date` is indexed for the reminder engine's range probe. Every other
   canonical FK is indexed so reverse lookups are index probes, not scans.
 - **Unindexed but persisted:** `events.event_end_date`, `events.reminder_dismissed`,
   `dogs.recorded_coi`, plus every non-indexed field. They persist and ride backups;
   they simply aren't queryable by key.
+- **Binary, base64 in backups:** `files.blob` is a real `Blob` — the schema's only
+  binary field. JSON can't hold a Blob, so `importExport.js` base64-tags it on export
+  and rehydrates it on restore (`BACKUP_FORMAT_VERSION` 2). This is what keeps stored
+  documents/receipts durable across the JSON backup **and** the Dropbox sync (both go
+  through `exportAll`/`restoreBackup`). Any future Blob field must round-trip the same
+  way — a plain `JSON.stringify` silently drops a Blob to `{}`.
 - `is_archived` is filtered in JS, not by index (IndexedDB can't key on booleans;
   trivial at kennel scale).
 
-A second, **additive** `version(2)` block now exists (foster whelps, §25):
-
-```
-db.version(2).stores({
-  litters: 'id, pairing_id, sire_id, dam_id, status, whelp_date, foster_partner_contact_id, is_archived'
-});
-```
-
-It adds exactly one index — `litters.foster_partner_contact_id` — so the referential
-guard can protect a foster partner Contact. Dexie inherits every unchanged table, so
-only `litters` is redeclared. `foster_direction` and the split fields are plain
-unindexed fields and so are not in the string.
+Everything lives in that one `version(1)` block, including later additions like
+`litters.foster_partner_contact_id` (§25, the referential guard for a foster partner
+Contact) and the `documents`/`files` tables (§26.1) — `foster_direction`, the foster split
+fields, and every other non-indexed field are plain unindexed and so are not in the strings.
 
 ### The versioning rule
 
-`version(1)` is now **frozen** — the arrival of `version(2)` above makes the
-additive-only rule live. From here on, schema changes are *additive only*: new
-tables/indexes go in a **new** `db.version(N).stores({...})` block, and every shipped
-version block (1 **and** 2) is **never edited again**. If you add an index/table, append
-a `version(3)` block — do not edit `version(1)` or `version(2)`.
+`version(1)` is still editable **in place** — but only because **nothing has shipped that
+needs migration**. There is no live data to migrate, so the single block absorbs every
+change; reconcile any schema edit with **Reset App to Start** + re-seed. The moment real
+data ships this changes permanently: from then on schema changes are **additive only** — a
+new table/index goes in a **new** `db.version(N).stores({...})` block and shipped blocks are
+never edited again. `db.js` calls out where that first `version(2)` block should be added.
 
 ---
 
@@ -332,8 +344,13 @@ the normal remove and never cascades**.
 - `DOG_/LITTER_/PAIRING_/KENNEL_REFERENCES` each carry an `expenses.subject_id` entry
   (compound-index + discriminator), so a subject can't be hard-deleted out from under its
   expenses.
-- `Contract` and `Expense` are leaves (empty `CONTRACT_REFERENCES` /
-  `EXPENSE_REFERENCES` — nothing points *at* them).
+- `DOG_REFERENCES` also carries a `documents.dog_id` entry (§26.1), so a dog with filed
+  documents can't be hard-deleted out from under them.
+- `Contract`, `Expense`, and `Document` are leaves (empty `CONTRACT_REFERENCES` /
+  `EXPENSE_REFERENCES` / `DOCUMENT_REFERENCES` — nothing points *at* them). A `files`
+  row is **not** in the registry: it is owned by exactly one Document (`documents.file_id`)
+  or one Expense (`expenses.receipt_file_id`) and is deleted alongside its owner in that
+  repo's `hardDelete`, never orphan-guarded.
 - The guard **skips any table not present in the current schema** — so it can't rot;
   adding a referencing table later is one appended line.
 - The polymorphic Event/Expense subject is matched via the compound index with a
@@ -463,9 +480,10 @@ row carries a `receipt_number`, that IS the natural key (`rcpt <n>`), so the sam
 always maps to the same ledger row and re-import updates it in place even if amount/date/
 subject changed; without one, the key is the composite subject+date+amount+category+vendor.
 Either way the match index only considers **non-archived, non-event-linked** ledger rows, so
-a re-import can never clobber a cost captured from the event form. There is **no
-photo/attachment side** — KennelOS stores no images (§15); only the extracted money data (and
-the `receipt_number` back-pointer) crosses over, the receipt image stays in the source app.
+a re-import can never clobber a cost captured from the event form. The CSV import carries
+**no image** — only the extracted money data (and the `receipt_number` back-pointer) crosses
+over. To attach the receipt image itself to a ledger row, use the in-app receipt capture on
+the expense form (§26.1); the importer doesn't touch files.
 
 **The expense importer has its own review screen** (`pages/expense-import.js`) — the one
 importer that does **not** use the shared `assets/importView.js`. Because an Expense is
@@ -601,7 +619,7 @@ intro-card / pinned-top-card presentation postdate it).
 
 App-shell cache so the app installs and works offline after first load.
 
-- `CACHE_NAME` (currently `kennelos-shell-v86`) + a `PRECACHE_URLS` list of **every** app
+- `CACHE_NAME` (currently `kennelos-shell-v4`) + a `PRECACHE_URLS` list of **every** app
   file (html/js/css/icons/vendor/resources).
 - `install` precaches the list (**`cache.addAll` is atomic** — one missing/renamed file
   fails the whole install). `activate` deletes old caches. Fetch is **cache-first** for
@@ -697,6 +715,8 @@ Placements/contracts: `sale`/`sales`, `stud-service`/`stud-services`, `contract`
 `puppy-record` (print-only puppy record, §23 — not a nav entry, reached from `sale`/`sales`).
 Financials print docs: `invoice` (print-only invoice/receipt generator, §24 — not a nav
 entry, reached from the Financials hub's "Invoice / Receipt" generator modal).
+Documents: `documents` (filed dog documents — local file storage, in the "More" menu and
+via a "📄 Documents" button on the dog page, §26.1).
 Today cluster: `dashboard`, `reminders`, `upcoming`, `board`, `scheduled-placements`.
 Reports: `litters-report`, `stud-services-report`, `placements-report`,
 `health-tests-report`, `litter-finances-report` (Litter P&L; `data/litterFinances.js`).
@@ -728,8 +748,11 @@ Don't assume these exist; several are explicitly deferred "open doors":
 - Genotype / Mendelian carrier-risk analysis; test-completeness audit.
 - A recurrence-rule engine (recurrence = the "log the next one" workflow on the event;
   `reminder_date` is the only future-dated field).
-- Photos / attachments (no `attachments` table, no Photos tab, no thumbnails). The only
-  image field is `Kennel.logo_data_url` (§4).
+- Photo galleries / a Photos tab / per-record image thumbnails on dogs & litters.
+  (Filed documents and expense receipts **do** store files — the `files`-table PDFs
+  behind Documents and `expenses.receipt_file_id`, §26.1 — and `Kennel.logo_data_url`
+  is still the one inline image field, §4; there is no general per-record photo store
+  beyond those.)
 - Pairing/litter-subject events in the CSV importer (dog-subject only).
 
 ---
@@ -1104,7 +1127,8 @@ The ledger has a **CSV import path** (the `expense` mapping in `csvImport.js`, r
 Import/Export → "Import expenses (CSV)"), so a companion receipts/mileage app — or any
 spreadsheet — can feed it with the standard dry-run + match-or-create preview. See §9 for the
 mapping (columns, subject resolution, mileage derivation, idempotent natural key). No photo
-crosses over — KennelOS stores no images (§15).
+crosses over on import — to attach a receipt image to a ledger row, use the in-app receipt
+capture on the expense form (§26.1).
 
 ### Mileage / transport costs
 
@@ -1331,8 +1355,9 @@ triggers the browser's Print → Save as PDF with the page's "Print / Save as PD
 ## 25. Foster whelps (foster-in & foster-out)
 
 Tracking a litter whelped/raised under a **caretaker↔owner arrangement** where the two parties
-differ, with a contract and an income split. Added in schema `version(2)` (§5) — the first
-additive block past the collapsed `version(1)`.
+differ, with a contract and an income split. `foster_partner_contact_id` is indexed in the
+collapsed `version(1)` block so the referential guard can protect the foster partner Contact
+(§5).
 
 ### The two settling ideas
 
@@ -1366,7 +1391,7 @@ additive block past the collapsed `version(1)`.
 ### Model touch-points (all additive; all covered in §4/§5/§7/§20/§21)
 
 - **Litter:** `foster_direction` (plain, nullable `foster_in`/`foster_out`),
-  `foster_partner_contact_id` (**indexed FK → Contact**, the one schema change — `version(2)`;
+  `foster_partner_contact_id` (**indexed FK → Contact**, the one added index —
   guarded in `CONTACT_REFERENCES`), `foster_comp_model` (`income_split`/`flat_per_pup`), and
   `foster_our_share_pct`/`foster_split_basis`/`foster_flat_fee_per_pup`/`foster_split_notes`
   (plain, documentation of the compensation terms; the real payout is the Expense). `litterRepo`
@@ -1510,36 +1535,54 @@ one writer**, which is what makes the scheme conflict-free — preserve that inv
   assistant events are ordinary Event rows, and the assistant db is a separate database
   on a separate device.
 
-## 26.1 Documents viewer — reading Kennel Papers from inside KennelOS
+## 26.1 Documents & receipt attachments — local file storage
 
-A **read-only** "Documents" page (`pages/documents.html` + `pages/documents.js`, in the
-**More** menu, plus a "📄 Documents" button on the dog page) that shows the document files
-kept in the sibling **Kennel Papers** app (pedigrees, health tests, registrations,
-contracts), grouped by dog. It reads; it never writes, edits, uploads, or deletes — Kennel
-Papers stays the sole owner of documents. Full spec:
-`docs/KennelOS_Documents_Viewer_Build_Spec_v1.md`.
+Real, **local** file storage, entirely offline — no external app, no Dropbox connection.
+Two surfaces share one storage stack:
 
-**The "no attachments table" rule (§15) is preserved.** No Dexie table, entity, repo, or FK
-is added; `db.js` and `referenceRegistry.js` are untouched. Document **bytes never enter
-IndexedDB** — the whole Kennel Papers backup `.zip` is downloaded and unzipped **into
-memory** on Refresh (`data/papersSnapshot.js`), and viewing/downloading a PDF slices those
-in-memory bytes into a throwaway object URL. The only persisted state is a small
-**text-only** list cache (`settings.js`, key `kennelOS.papersSnapshot` — documents + lean
-dog/file metadata, no bytes, no thumbnails) so the list renders offline with per-type icons.
+- **Documents** — a "Documents" page (`pages/documents.html` + `pages/documents.js`, in the
+  **More** menu, plus a "📄 Documents" button on the dog page) where you file a document
+  against a dog (pedigree / health test / registration / contract / other), grouped by dog,
+  with a type filter and search. Full CRUD, all local.
+- **Expense receipts** — the receipt-capture widget on both expense forms (§21): attach a
+  receipt to any ledger row. See "Receipt capture" below.
 
-**Second Dropbox connection.** KennelOS's own `data/dropbox.js` is App-folder scoped to
-`/Apps/KennelOS/` and cannot see the Kennel Papers folder. So `data/papersDropbox.js` is a
-**separate** PKCE client using the **Kennel Papers app key** (`fvmtvesy1u1l0xf`, scoped to
-`/Apps/Kennel Papers/`), with its own settings namespace (`kennelOS.papersDropbox`) so the
-two connections never collide. It requests only `files.content.read` and only calls
-`list_folder` + `files/download`. The `?code=` redirect is handled solely by `documents.js`
-(app.js doesn't touch Dropbox), so there's no clash with the main connect flow.
+**Storage stack (shared by both).** Two Dexie tables (§4, §5): `documents` (metadata + a
+`dog_id` and a `file_id`, via `data/documentRepo.js` on the standard `makeRepo` +
+`referenceRegistry` pattern) and `files` (the blob archive, via `data/fileRepo.js` — one row
+per stored PDF: `blob` + `thumbnail` + meta). `expenses.receipt_file_id` points a ledger row
+at a `files` row the same way. A file is **owned by exactly one** Document or Expense: it is
+deleted alongside its owner in that repo's `hardDelete`, and so is *not* a
+`referenceRegistry` entry (§7). `documents.dog_id` **is** guarded, via a `documents.dog_id`
+line in `DOG_REFERENCES` — a dog with filed documents can't be hard-deleted out from under
+them.
 
-- **Dog join is by id** — a Kennel Papers `document.dog_id` equals a KennelOS `Dog.id`, so
-  no matching is needed. Documents for a dog not (yet) in KennelOS appear under an
-  "Unmatched" group behind a toggle, never dropped silently.
-- **One-time setup:** register the Documents page URL(s) (deployed + `localhost/pages/
-  documents.html`) as OAuth Redirect URIs on the **Kennel Papers** Dropbox app.
-- **Precache:** `pages/documents.html`, `pages/documents.js`, `data/papersDropbox.js`,
-  `data/papersSnapshot.js`, `data/zip.js` are in `sw.js`. Dropbox calls are cross-origin, so
-  the cache-first handler ignores them (§12).
+**Every stored file is a PDF.** An uploaded PDF is stored as-is. A photo/screenshot (camera,
+or picked from the library — multi-page allowed for documents) is converted client-side to a
+compressed multi-page PDF by `data/pdfBuild.js` — **no library**: it downscales + JPEG
+re-encodes each page and embeds the JPEG directly via the PDF `DCTDecode` filter, and yields
+a small JPEG data-URL thumbnail for the list. `createImageBitmap` also normalizes iPhone
+HEIC on the way in. Viewing/downloading goes through the shared `viewPdfModal` (`assets/ui.js`)
+/ the Documents page's own `<embed>` viewer, off a throwaway object URL.
+
+**Receipt capture (`assets/receiptCapture.js`).** One shared widget — built the same way
+`buildMileageFields`/`wireMileageMode` are shared — wired into **both** expense forms (the
+Financials hub's Add Expense modal and each subject's Expense panel), so there's one
+implementation. Take/choose a photo or screenshot, or upload a PDF. A freshly picked photo is
+auto-scanned offline by `data/ocr.js` (vendored Tesseract.js, LSTM core; lazy — the ≈7 MB
+engine loads only on first scan and every failure path degrades to manual entry) to pre-fill
+amount / date / vendor / receipt # **only when those fields are still blank/default** — never
+overwriting what the user typed. `resolveFileId()` at save time builds/stores the file (or
+reuses/removes the existing one) and returns the `receipt_file_id` to persist.
+
+**Durability.** `files.blob` is the schema's only binary field; it is base64-tagged through
+the JSON backup and the Dropbox sync (`importExport.js`, `BACKUP_FORMAT_VERSION` 2 — see §5),
+so filed documents and receipts survive backup/restore and two-phone sync. A plain
+`JSON.stringify` would silently drop a Blob to `{}`, so any future Blob field must
+round-trip the same way.
+
+- **Precache:** `pages/documents.html`, `pages/documents.js`, `data/documentRepo.js`,
+  `data/fileRepo.js`, `data/pdfBuild.js`, `data/ocr.js`, `assets/receiptCapture.js`, and the
+  four `vendor/tesseract/*` assets are in `sw.js` — scanning works with no network after
+  first install. Bump `CACHE_NAME` on any change to that file set (currently
+  `kennelos-shell-v4`).
