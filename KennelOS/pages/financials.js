@@ -133,7 +133,7 @@ function openAddExpense(onSaved) {
         <div class="field"><label>Vendor</label>
           <input id="af-vendor" type="text" placeholder="Who was paid"></div>
         <div class="field"><label>Receipt #</label>
-          <input id="af-receipt" type="text" placeholder="e.g. R-0007 (ties to a photo receipt)"></div>
+          <input id="af-receipt" type="text" placeholder="Optional — auto-filled from a scanned receipt when found"></div>
         <div class="field field-wide"><label>Notes</label><textarea id="af-notes"></textarea></div>
         ${buildReceiptField('af', {})}
       </div>

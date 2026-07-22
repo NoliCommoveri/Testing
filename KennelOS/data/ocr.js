@@ -56,8 +56,9 @@ export async function isAvailable() {
 }
 
 // Recognize text on an image blob and pull out likely fields. Returns
-// { rawText, amount, date, vendor } — any field may be null when not confidently
-// found. Throws only if the engine itself can't run (caller falls back to manual).
+// { rawText, amount, date, vendor, receiptNumber } — any field may be null
+// when not confidently found. Throws only if the engine itself can't run
+// (caller falls back to manual).
 export async function scan(fileOrBlob, onProgress) {
   const worker = await getWorker(onProgress);
   const { data } = await worker.recognize(fileOrBlob);
@@ -133,10 +134,21 @@ function parseVendor(text) {
   return null;
 }
 
+// Receipt/invoice/order/transaction number: whatever alphanumeric token
+// follows one of those labels on the same line. Not every receipt prints
+// one, so this is best-effort — a miss just leaves the field for manual entry.
+const RECEIPT_NO_RE = /\b(?:receipt|invoice|order|transaction|trans|ref|reference|auth)\s*#?\s*(?:no\.?|num(?:ber)?)?\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-]{2,19})/i;
+
+function parseReceiptNumber(text) {
+  const m = text.match(RECEIPT_NO_RE);
+  return m ? m[1] : null;
+}
+
 export function parseFields(text) {
   return {
     amount: parseAmount(text),
     date: parseDate(text),
-    vendor: parseVendor(text)
+    vendor: parseVendor(text),
+    receiptNumber: parseReceiptNumber(text)
   };
 }

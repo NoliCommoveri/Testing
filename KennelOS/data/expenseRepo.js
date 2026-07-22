@@ -83,8 +83,11 @@ function normalize(data) {
     amount: (isMileage && rate != null) ? round2(miles * rate) : Number(data.amount),
     category: data.category || 'other',
     event_id: data.event_id || null,
-    // A human-facing receipt/reference number (plain, unindexed) that ties this
-    // ledger row back to a paper/photo receipt. Trimmed to null when blank.
+    // A human-facing receipt/invoice number (plain, unindexed) — the vendor's
+    // own number printed on the receipt, not an id of anything in KennelOS.
+    // Auto-filled by OCR off the attached receipt photo when found
+    // (data/ocr.js), editable either way. Also csvImport.js's dedup key for
+    // re-importing an expense CSV, when present. Trimmed to null when blank.
     receipt_number: (data.receipt_number == null ? '' : String(data.receipt_number)).trim() || null,
     // The stored receipt file (data/fileRepo.js), attached via the receipt
     // capture widget (assets/receiptCapture.js) — a photo/screenshot compressed

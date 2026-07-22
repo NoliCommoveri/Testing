@@ -132,7 +132,7 @@ async function openExpenseForm({ subjectType, subjectId, expense = null, onSaved
         <div class="field"><label>Vendor</label>
           <input id="xf-vendor" type="text" value="${esc(draft.vendor)}" placeholder="Who was paid"></div>
         <div class="field"><label>Receipt #</label>
-          <input id="xf-receipt" type="text" value="${esc(draft.receipt_number)}" placeholder="e.g. R-0007 (ties to a photo receipt)"></div>
+          <input id="xf-receipt" type="text" value="${esc(draft.receipt_number)}" placeholder="Optional — auto-filled from a scanned receipt when found"></div>
         <div class="field"><label>Reimbursable</label>
           <label class="check-inline"><input type="checkbox" id="xf-reimbursable"${draft.reimbursable ? ' checked' : ''}> Owed back (e.g. by a foster dam's owner)</label></div>
         <div class="field" id="xf-reimbursed-wrap"${draft.reimbursable ? '' : ' style="display:none;"'}><label>Reimbursed on</label>

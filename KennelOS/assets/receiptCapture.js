@@ -68,6 +68,7 @@ export function wireReceiptField(modal, p, { currentFile } = {}) {
   const amountEl = modal.querySelector(`#${p}-amount`);
   const dateEl = modal.querySelector(`#${p}-date`);
   const vendorEl = modal.querySelector(`#${p}-vendor`);
+  const receiptNoEl = modal.querySelector(`#${p}-receipt`);
   const today = todayYMD();
 
   let pending = null; // { kind: 'photo'|'pdf', files: File[] }
@@ -100,21 +101,24 @@ export function wireReceiptField(modal, p, { currentFile } = {}) {
   }
 
   // Auto-scan a freshly picked photo (captured or chosen from the library,
-  // including a screenshot) and fill amount/date/vendor when they're still
-  // blank/default — never overwriting something the user already typed.
+  // including a screenshot) and fill amount/date/vendor/receipt # when
+  // they're still blank/default — never overwriting something the user
+  // already typed. Not every receipt prints its own number, so that field is
+  // best-effort and often stays blank for manual entry.
   async function runScan(file) {
     let available = false;
     try { available = await ocr.isAvailable(); } catch { available = false; }
     if (!available) return;
     scanStatus.textContent = 'Reading receipt…';
     try {
-      const { amount, date, vendor } = await ocr.scan(file, (pr) => {
+      const { amount, date, vendor, receiptNumber } = await ocr.scan(file, (pr) => {
         scanStatus.textContent = `Reading receipt… ${Math.round(pr * 100)}%`;
       });
       const filled = [];
       if (amount != null && amountEl && !amountEl.value) { amountEl.value = amount; filled.push('amount'); }
       if (date && dateEl && dateEl.value === today) { dateEl.value = date; filled.push('date'); }
       if (vendor && vendorEl && !vendorEl.value) { vendorEl.value = vendor; filled.push('vendor'); }
+      if (receiptNumber && receiptNoEl && !receiptNoEl.value) { receiptNoEl.value = receiptNumber; filled.push('receipt #'); }
       scanStatus.textContent = filled.length
         ? `Filled ${filled.join(', ')} from the receipt — please double-check.`
         : 'Couldn’t read the details — enter them by hand.';
