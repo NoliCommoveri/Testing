@@ -5,12 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Documents — KennelOS</title>
   <!--
-    documents.html — a READ-ONLY viewer of the Kennel Papers document vault, from
-    inside KennelOS (Documents Viewer Build Spec v1; End-State guide §26). It
-    connects to the *Kennel Papers* Dropbox app folder (a second connection,
-    data/papersDropbox.js), pulls the newest Kennel Papers backup, and lists each
-    dog's documents grouped by dog. No document store is added to KennelOS — file
-    bytes live only in memory for the session (data/papersSnapshot.js).
+    documents.html — local document storage: upload a PDF, or take/choose a
+    photo or screenshot (converted to a compressed PDF), and file it as a
+    pedigree, health test, registration, contract, or other document against
+    a dog. Everything lives in this browser's IndexedDB (data/fileRepo.js +
+    data/documentRepo.js) — no external app, no Dropbox connection.
   -->
   <link rel="stylesheet" href="../assets/app.css">
   <link rel="manifest" href="../manifest.json">
@@ -27,31 +26,16 @@
     <div class="page-header">
       <div>
         <h1>Documents</h1>
-        <p class="page-subtitle">View and download documents from Kennel Papers below.</p>
+        <p class="page-subtitle">Pedigrees, health tests, registrations, and other files — filed per dog, stored on this device.</p>
+      </div>
+      <div class="pill-row">
+        <button class="btn btn-primary" id="btn-add-document">+ Add Document</button>
       </div>
     </div>
 
     <div id="page-msg"></div>
 
-    <section class="card" id="connect-card" style="display:none;">
-      <h2 style="margin-top:0;">Connect Kennel Papers Dropbox</h2>
-      <p class="muted">Kennel Papers keeps your document files in its own Dropbox folder, separate from KennelOS's sync. Sign in with the same Dropbox account you use for Kennel Papers to see those documents here. This connection is read-only.</p>
-      <div class="form-actions">
-        <button class="btn btn-primary" id="dbx-connect">Connect Kennel Papers Dropbox</button>
-      </div>
-    </section>
-
-    <section class="card" id="status-card" style="display:none;">
-      <div class="row-between" style="flex-wrap:wrap;gap:10px;">
-        <p class="muted" id="snapshot-status" style="margin:0;">—</p>
-        <div class="form-actions" style="margin:0;">
-          <button class="btn btn-primary" id="btn-refresh">⬇ Refresh</button>
-          <button class="btn" id="btn-disconnect">Disconnect</button>
-        </div>
-      </div>
-    </section>
-
-    <section class="card" id="filter-card" style="display:none; margin-top:16px;">
+    <section class="card" style="margin-top:16px;">
       <nav class="seg-tabs" id="type-chips" aria-label="Document types"></nav>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
         <div class="field" style="flex:1;min-width:180px;">
@@ -63,9 +47,6 @@
           <select id="dog-filter"><option value="">All dogs</option></select>
         </div>
       </div>
-      <label class="check-inline" style="margin-top:8px;">
-        <input id="show-unmatched" type="checkbox"> Show documents for dogs not in KennelOS
-      </label>
     </section>
 
     <section id="list" style="margin-top:16px;"></section>

@@ -65,6 +65,14 @@ export const db = new Dexie('KennelOSBreedingApp');
 //    `foster_direction` and the split fields (`foster_our_share_pct`,
 //    `foster_split_basis`, `foster_split_notes`) are plain unindexed fields
 //    (filtered in JS, like is_archived) and so are NOT listed.
+//  - `documents` is a filed document (pedigree/health test/registration/contract/
+//    other) belonging to exactly one dog and pointing at exactly one stored
+//    `files` row (documentRepo.js). Indexed on dog_id (a dog's document list),
+//    doc_type (the type filter chips), and doc_date (newest-first sort).
+//  - `files` is the blob archive backing `documents` — the bytes of an uploaded
+//    PDF, or a photo capture converted to a compressed PDF client-side
+//    (data/pdfBuild.js), never queried by anything but id, so only `created_at`
+//    (backup ordering) is indexed alongside it.
 db.version(1).stores({
   dogs:          'id, sire_id, dam_id, litter_id, breeder_kennel_id, owner_contact_id, *co_owner_contact_ids, status, ownership_type, sex, breed, kennel_id, is_archived',
   events:        'id, [subject_type+subject_id], event_type, event_date, reminder_date, related_dog_id, related_contact_id, is_archived',
@@ -75,7 +83,9 @@ db.version(1).stores({
   litters:       'id, pairing_id, sire_id, dam_id, status, whelp_date, foster_partner_contact_id, is_archived',
   sales:         'id, dog_id, buyer_contact_id, referred_by_contact_id, status, placement_type, is_archived',
   contracts:     'id, contract_type, status, related_sale_id, related_stud_service_id, related_dog_id, related_contact_id, is_archived',
-  stud_services: 'id, our_dog_id, partner_dog_id, partner_contact_id, referred_by_contact_id, direction, status, pairing_id, is_archived'
+  stud_services: 'id, our_dog_id, partner_dog_id, partner_contact_id, referred_by_contact_id, direction, status, pairing_id, is_archived',
+  documents:     'id, dog_id, doc_type, doc_date, is_archived',
+  files:         'id, created_at'
 });
 
 // --- First-run storage durability ----------------------------------------
