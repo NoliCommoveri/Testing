@@ -12,11 +12,12 @@ the "archive = departed" mechanism is hidden so it can't be reverse-engineered i
 ## 0. Two numbers still open (the only unresolved knob)
 
 ```js
-const CAP_DOGS    = 6;   // recommended default — counting dogs
-const CAP_LITTERS = 2;   // recommended default — litters
+const CAP_DOGS    = 6;   // locked for launch — counting dogs
+const CAP_LITTERS = 2;   // locked for launch — litters
 ```
 
-Everything else below is locked. Pin these before building.
+Kept as named constants so they're a one-line change later, but **6 / 2 is decided** — no open
+knobs remain. The rest of this spec is locked.
 
 ---
 
@@ -119,22 +120,33 @@ count** (there won't normally be any — Lite has no manual litter-archive eithe
 
 ## 5. The exit: "this dog left my program" = archive + hide
 
-Freeing a dog slot is a single action, and it is the **only** way to archive a dog in Lite.
+Archiving is the **only** way a dog (or a sold puppy) leaves the active roster in Lite, and it is
+always a deliberate, confirmed action.
 
 - **No manual "Archive" button on dogs in Lite**, and **no "include archived" toggle** on the dog
   list or in pickers. If a user could freely archive, archive-doesn't-count would be a one-click
   cap bypass. Removing the manual path is what makes §4 safe: the only archive is a declared
   departure, and faking a departure hides a dog you still own (pillar 4 in the plan).
-- **The departure action** (from the dog profile and/or the sale-delivery flow) sets
+- **The departure action** (from the dog profile and from the sale-delivery flow) sets
   `is_archived: true` (via `dogRepo.archive`) and, optionally, `status_date`. It replaces the
   current `sale.js` "update ownership → external/external_reference" prompt (`sale.js:361`), which
   is Pro-only behavior now.
-- **Undo:** the departure shows a transient "Undo" (toast). Undo un-archives and **bypasses the
-  cap check** (it's reverting an accidental action, not adding a dog). Offered only immediately
-  after the action.
+- **Sold puppies are archived too.** When a puppy's sale is delivered, the pup departs the roster
+  the same way (it never counted toward the cap — this is roster tidiness, and it keeps the
+  archived-dog handling uniform). Its Sale record survives.
+- **Every archive action is gated by a blocking "this is permanent" confirm the user must accept**
+  — no silent archive, no transient auto-undo (the confirm *is* the safety, and an undo would
+  contradict the message). Honest wording, because the app is soft-delete-only and never destroys
+  history:
+  > *"Remove [dog] from your program? This can't be undone here — [dog] leaves your roster and you
+  > won't be able to edit it or bring it back. It stays in your dogs' pedigrees for lineage.
+  > \[Cancel] \[Remove permanently]"*
+
+  This applies to **every** archive entry point that exists in Lite, not just dogs.
 - **Pedigree/history stay intact:** archived dogs are soft-deleted rows, so an offspring's pedigree
-  still renders the departed parent, and Sale records still show who bought what. Nothing is lost —
-  the dog is hidden, not destroyed.
+  still renders the departed parent, and Sale records still show who bought what. Nothing is
+  destroyed — the dog is hidden and can't be brought back *in Lite*, which is what "permanent"
+  means to the user.
 
 ---
 
@@ -221,11 +233,13 @@ Bulk import bypasses the repo guards. Stance:
 - Serve locally and exercise, in a **Lite** build:
   1. Create 6 counting dogs → 7th (create) blocked with the nudge.
   2. Keep a litter, mature a pup at cap → blocked (`✗→✓`), nudge shown.
-  3. Depart one dog (archive) → count drops, the pup now matures (`✗→✓`, under cap).
+  3. Depart one dog → the **"this is permanent" confirm** appears and must be accepted; on accept
+     the count drops and the pup now matures (`✗→✓`, under cap). Cancelling the confirm leaves
+     everything unchanged.
   4. Confirm the departed dog is **gone from the list**, has **no include-archived toggle** to
      bring it back, and its name in the **pedigree** and in its **Sale** is **not clickable** and
      shows **no "arch" badge**.
-  5. Undo a departure immediately → dog returns even though at cap (undo bypasses the check).
+  5. Deliver a puppy sale → the pup is archived (departs the roster) and its Sale record remains.
   6. Import a 10-dog backup into Lite → succeeds; a subsequent new adult add is blocked.
 - In a **Pro** build (no-op config): none of the above blocks; archived dogs remain clickable with
   the "arch" badge (existing behavior).
@@ -234,6 +248,5 @@ Bulk import bypasses the repo guards. Stance:
 
 ## 11. Open items to confirm before build
 
-1. **`CAP_DOGS` / `CAP_LITTERS` numbers** (§0) — 6 / 2 recommended.
-2. **Does the departure action also archive sold *puppies*?** Optional polish; puppies don't count,
-   so it's a roster-tidiness choice, not a cap concern.
+None. Cap numbers are locked at **6 / 2** (§0); sold puppies **are** archived on departure (§5);
+every archive action is confirm-gated (§5). This spec is build-ready.

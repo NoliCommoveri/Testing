@@ -306,14 +306,14 @@ see "Hosting, editions, and origin isolation."
 - **Demo hardening (#8)** — **strip** the save/export paths from the demo build; an unlocked copy
   is a dead end.
 - **In-Lite links** — Lite links out to Demo and Pro directly; no manual email step.
+- **Cap numbers** — **6** counting dogs, **2** litters. `co_owned` **counts**; `deceased` and
+  archived/departed dogs **don't**. Full rules in `KennelOS_Lite_Cap_Enforcement_Spec.md`.
+- **Exit = archive-on-departure** — sold/rehomed/placed dogs *and sold puppies* are archived and
+  hidden; every archive action is gated by a **"this is permanent" confirm** the user must accept.
 
 **Still open (don't block the layout, but pin before shipping):**
 
-1. **Cap numbers** — 6 owned dogs? 2 litters? And does **co-owned** count toward the dog cap,
-   or only fully owned? *(This is the one piece of real runtime logic Lite enforces — pin it
-   precisely against `dogRepo`, including create-vs-status-change.)*
-2. **Deceased dogs** — count toward the cap or not? *(Recommend: not.)*
-4. **Inline "add buyer" in the sale flow** — confirm Lite can create/pick a buyer from inside
+1. **Inline "add buyer" in the sale flow** — confirm Lite can create/pick a buyer from inside
    a sale, since the full Contacts section is Pro-only.
 
 ---
