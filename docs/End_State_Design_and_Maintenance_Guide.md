@@ -619,7 +619,7 @@ intro-card / pinned-top-card presentation postdate it).
 
 App-shell cache so the app installs and works offline after first load.
 
-- `CACHE_NAME` (currently `kennelos-shell-v4`) + a `PRECACHE_URLS` list of **every** app
+- `CACHE_NAME` (currently `kennelos-shell-v5`) + a `PRECACHE_URLS` list of **every** app
   file (html/js/css/icons/vendor/resources).
 - `install` precaches the list (**`cache.addAll` is atomic** — one missing/renamed file
   fails the whole install). `activate` deletes old caches. Fetch is **cache-first** for
@@ -1594,4 +1594,4 @@ round-trip the same way.
   `data/fileRepo.js`, `data/pdfBuild.js`, `data/ocr.js`, `assets/receiptCapture.js`, and the
   four `vendor/tesseract/*` assets are in `sw.js` — scanning works with no network after
   first install. Bump `CACHE_NAME` on any change to that file set (currently
-  `kennelos-shell-v4`).
+  `kennelos-shell-v5`).
