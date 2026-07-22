@@ -46,7 +46,7 @@ function validateExpense(candidate) {
     throw new Error(`Expense: subject_type must be one of ${SUBJECT_TYPES.join(', ')}.`);
   }
   if (candidate.subject_id == null || candidate.subject_id === '') {
-    throw new Error('Expense: "subject_id" is required.');
+    throw new Error('Subject is required.');
   }
   if (!candidate.expense_date) {
     throw new Error('Expense: "expense_date" is required.');
