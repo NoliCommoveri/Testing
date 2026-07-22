@@ -16,6 +16,7 @@ import { makeRepo } from './repoBase.js';
 import { EXPENSE_REFERENCES } from './referenceRegistry.js';
 import { EXPENSE_SUBJECT_TYPES, defaultExpenseCategoryFor } from './vocab.js';
 import { getExpensesMigrated, markExpensesMigrated } from './settings.js';
+import { fileRepo } from './fileRepo.js';
 
 const base = makeRepo('expenses', EXPENSE_REFERENCES);
 
@@ -83,9 +84,13 @@ function normalize(data) {
     category: data.category || 'other',
     event_id: data.event_id || null,
     // A human-facing receipt/reference number (plain, unindexed) that ties this
-    // ledger row back to a paper/photo receipt — e.g. the number the Receipts
-    // companion app stamps on each capture. Trimmed to null when blank.
+    // ledger row back to a paper/photo receipt. Trimmed to null when blank.
     receipt_number: (data.receipt_number == null ? '' : String(data.receipt_number)).trim() || null,
+    // The stored receipt file (data/fileRepo.js), attached via the receipt
+    // capture widget (assets/receiptCapture.js) — a photo/screenshot compressed
+    // to PDF, or an uploaded PDF. Plain, unindexed: nothing queries an expense
+    // by its receipt file, only fetches it by id when viewing/editing.
+    receipt_file_id: data.receipt_file_id || null,
     // Reimbursable ledger fields (plain, unindexed — guide §4/§21). A foster-in
     // cost the dam's owner has agreed to pay back is flagged `reimbursable`; once
     // settled, `reimbursed_date` records when. A reimbursed-but-unflagged row is
@@ -179,6 +184,15 @@ export const expenseRepo = {
       await db.events.update(ev.id, { cost: null });
     }
     markExpensesMigrated();
+  },
+
+  // Hard delete also removes the linked receipt file — a file is owned by
+  // exactly one expense, so it doesn't get its own referenceRegistry guard
+  // (same posture as documentRepo.hardDelete for a filed document's file).
+  async hardDelete(id) {
+    const existing = await db.expenses.get(id);
+    await base.hardDelete(id);
+    if (existing?.receipt_file_id) await fileRepo.remove(existing.receipt_file_id);
   }
 };
 

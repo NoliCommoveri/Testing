@@ -5,10 +5,12 @@
 // table (expenseRepo); this is the ledger-first entry point that complements the
 // convenience "Cost" field on the event form.
 import { expenseRepo, mileageAmount } from '../data/expenseRepo.js';
+import { fileRepo } from '../data/fileRepo.js';
 import { EXPENSE_CATEGORIES } from '../data/vocab.js';
 import { getMileageDefaults, setMileageDefaults } from '../data/settings.js';
 import { esc, badge, fmtDate, fmtMoney, todayYMD, confirmModal } from './ui.js';
 import { openEventForm } from './eventForm.js';
+import { buildReceiptField, wireReceiptField, viewReceipt } from './receiptCapture.js';
 
 // Shared mileage-mode fragments so this panel's modal and the Financials hub's
 // add-expense modal stay in lockstep. `buildMileageFields` returns the extra
@@ -93,8 +95,13 @@ const EVENTABLE = new Set(['dog', 'litter', 'pairing']);
 
 // A small modal for creating/editing one expense. Resolves via onSaved. The
 // subject is fixed by the panel's context and never editable here.
-function openExpenseForm({ subjectType, subjectId, expense = null, onSaved }) {
+async function openExpenseForm({ subjectType, subjectId, expense = null, onSaved }) {
   const isEdit = !!expense;
+  let currentFile = null;
+  if (expense?.receipt_file_id) {
+    const row = await fileRepo.get(expense.receipt_file_id);
+    if (row) { const { blob, ...meta } = row; currentFile = meta; }
+  }
   const draft = {
     amount: expense?.amount ?? '',
     miles: expense?.miles ?? null,
@@ -132,6 +139,7 @@ function openExpenseForm({ subjectType, subjectId, expense = null, onSaved }) {
           <input id="xf-reimbursed" type="date" value="${esc(draft.reimbursed_date)}"></div>
         <div class="field field-wide"><label>Notes</label>
           <textarea id="xf-notes">${esc(draft.notes)}</textarea></div>
+        ${buildReceiptField('xf', { currentFile })}
       </div>
       <div id="xf-error"></div>
       <div class="form-actions">
@@ -144,6 +152,7 @@ function openExpenseForm({ subjectType, subjectId, expense = null, onSaved }) {
   const categorySel = modal.querySelector('#xf-category');
   categorySel.value = draft.category;
   const mileage = wireMileageMode(modal, 'xf', categorySel);
+  const receipt = wireReceiptField(modal, 'xf', { currentFile });
 
   // Reimbursable toggle reveals the "Reimbursed on" date (the repo also coerces
   // reimbursable=true whenever a reimbursed date is present, so the two agree).
@@ -157,18 +166,22 @@ function openExpenseForm({ subjectType, subjectId, expense = null, onSaved }) {
   function onKey(e) { if (e.key === 'Escape') close(); }
 
   async function save() {
-    const payload = {
-      subject_type: subjectType,
-      subject_id: subjectId,
-      expense_date: modal.querySelector('#xf-date').value,
-      vendor: modal.querySelector('#xf-vendor').value.trim(),
-      receipt_number: modal.querySelector('#xf-receipt').value.trim(),
-      reimbursable: reimbursableEl.checked,
-      reimbursed_date: reimbursableEl.checked ? (modal.querySelector('#xf-reimbursed').value || null) : null,
-      notes: modal.querySelector('#xf-notes').value,
-      ...mileage.payloadBits()
-    };
+    const saveBtn = modal.querySelector('[data-act="save"]');
+    saveBtn.disabled = true;
     try {
+      const receipt_file_id = await receipt.resolveFileId(expense?.receipt_file_id || null);
+      const payload = {
+        subject_type: subjectType,
+        subject_id: subjectId,
+        expense_date: modal.querySelector('#xf-date').value,
+        vendor: modal.querySelector('#xf-vendor').value.trim(),
+        receipt_number: modal.querySelector('#xf-receipt').value.trim(),
+        reimbursable: reimbursableEl.checked,
+        reimbursed_date: reimbursableEl.checked ? (modal.querySelector('#xf-reimbursed').value || null) : null,
+        notes: modal.querySelector('#xf-notes').value,
+        receipt_file_id,
+        ...mileage.payloadBits()
+      };
       const saved = isEdit
         ? await expenseRepo.update(expense.id, payload)
         : await expenseRepo.create(payload);
@@ -176,6 +189,8 @@ function openExpenseForm({ subjectType, subjectId, expense = null, onSaved }) {
       onSaved?.(saved);
     } catch (e) {
       modal.querySelector('#xf-error').innerHTML = `<div class="inline-error">${esc(e.message || String(e))}</div>`;
+    } finally {
+      saveBtn.disabled = false;
     }
   }
 
@@ -233,12 +248,15 @@ export function renderExpensePanel(opts) {
         : '';
       const logBtn = (!x.event_id && EVENTABLE.has(subjectType))
         ? `<button class="btn btn-sm" data-act="log-event" data-idx="${i}" title="Create a linked event for this cost">Log event →</button>` : '';
+      const receiptBtn = x.receipt_file_id
+        ? `<button class="btn btn-sm" data-act="view-receipt" data-idx="${i}" title="View the attached receipt">📎 Receipt</button>` : '';
       return `<li class="row-between${x.is_archived ? ' row-archived' : ''}" style="padding:8px 0; border-top:1px solid var(--border); gap:10px;">
         <div style="flex:1;">
           <div>${badge(EXPENSE_CATEGORIES, x.category)} <strong>${esc(fmtMoney(x.amount))}</strong> <span class="faint">${esc(fmtDate(x.expense_date))}</span>${eventTag}${reimbursableTag}</div>
           ${meta ? `<div class="muted" style="font-size:14px;">${meta}</div>` : ''}
         </div>
         <div class="pill-row">
+          ${receiptBtn}
           ${logBtn}
           <button class="btn btn-sm" data-act="edit" data-idx="${i}">Edit</button>
           <button class="btn btn-sm" data-act="archive" data-idx="${i}">${x.is_archived ? 'Unarchive' : 'Archive'}</button>
@@ -256,6 +274,8 @@ export function renderExpensePanel(opts) {
   async function onAction(act, x) {
     if (act === 'edit') {
       openExpenseForm({ subjectType, subjectId, expense: x, onSaved: refresh });
+    } else if (act === 'view-receipt') {
+      viewReceipt(x.receipt_file_id, x.vendor || 'Receipt');
     } else if (act === 'archive') {
       x.is_archived ? await expenseRepo.unarchive(x.id) : await expenseRepo.archive(x.id);
       refresh();

@@ -69,10 +69,13 @@ export const db = new Dexie('KennelOSBreedingApp');
 //    other) belonging to exactly one dog and pointing at exactly one stored
 //    `files` row (documentRepo.js). Indexed on dog_id (a dog's document list),
 //    doc_type (the type filter chips), and doc_date (newest-first sort).
-//  - `files` is the blob archive backing `documents` — the bytes of an uploaded
-//    PDF, or a photo capture converted to a compressed PDF client-side
-//    (data/pdfBuild.js), never queried by anything but id, so only `created_at`
-//    (backup ordering) is indexed alongside it.
+//  - `files` is the blob archive backing `documents` AND `expenses.receipt_file_id`
+//    — the bytes of an uploaded PDF, or a photo/screenshot converted to a
+//    compressed PDF client-side (data/pdfBuild.js), never queried by anything
+//    but id, so only `created_at` (backup ordering) is indexed alongside it.
+//  - `expenses.receipt_file_id` (assets/receiptCapture.js) is a plain,
+//    unindexed FK into `files` — same posture as `vendor`/`notes`, fetched by
+//    id only, never queried/filtered on.
 db.version(1).stores({
   dogs:          'id, sire_id, dam_id, litter_id, breeder_kennel_id, owner_contact_id, *co_owner_contact_ids, status, ownership_type, sex, breed, kennel_id, is_archived',
   events:        'id, [subject_type+subject_id], event_type, event_date, reminder_date, related_dog_id, related_contact_id, is_archived',

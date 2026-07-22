@@ -27,6 +27,7 @@ const PRECACHE_URLS = [
   'assets/onboardingUI.js',
   'assets/pedigree.js',
   'assets/puppyForm.js',
+  'assets/receiptCapture.js',
   'assets/reportView.js',
   'assets/sampleDataUI.js',
   'assets/timeline.js',
@@ -61,6 +62,7 @@ const PRECACHE_URLS = [
   'data/litterRepo.js',
   'data/nudges.js',
   'data/nudgeState.js',
+  'data/ocr.js',
   'data/pairingRepo.js',
   'data/pdfBuild.js',
   'data/referenceRegistry.js',
@@ -171,6 +173,10 @@ const PRECACHE_URLS = [
   'vendor/dexie.min.mjs',
   'vendor/lz-string.min.mjs',
   'vendor/papaparse.min.mjs',
+  'vendor/tesseract/eng.traineddata.gz',
+  'vendor/tesseract/tesseract-core-simd-lstm.wasm.js',
+  'vendor/tesseract/tesseract.esm.min.js',
+  'vendor/tesseract/worker.min.js',
   'resources/common_tests_by_breed_seed.csv'
 ];
 
