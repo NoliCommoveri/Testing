@@ -479,6 +479,11 @@ table.data tr.row-detail .dl-meta { margin: 0; }
 .row-between { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .stack-sm > * + * { margin-top: 8px; }
 .pill-row { display: flex; gap: 6px; flex-wrap: wrap; }
+/* An author `display` beats the UA `[hidden]{display:none}`, so a `.pill-row`
+   toggled via the `hidden` attribute/property (e.g. the photo-vs-PDF source
+   switch on the receipt-capture and Documents forms) needs this to actually
+   hide — same idiom as `.card-body[hidden]` / `tr.row-detail[hidden]`. */
+.pill-row[hidden] { display: none; }
 /* Trailing action button(s) in a row-between header/row: pin them to the row's
    right edge even when the outer flex-wrap pushes them onto their own line
    (narrow viewport) — otherwise a wrapped line's item defaults to the left.

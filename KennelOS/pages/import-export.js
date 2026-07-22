@@ -1,10 +1,8 @@
 // import-export.js — wires the Import/Export page to the backup engine.
 import { downloadBackup, readBackupFile, inspectBackup, restoreBackup } from '../data/importExport.js';
 import { getLastBackupDate } from '../data/settings.js';
-import { hasSampleData } from '../data/sampleData.js';
-import { promptClearSampleData } from '../assets/sampleDataUI.js';
 import { hasMyKennelSetup, getMyKennelName } from '../data/kennelSetup.js';
-import { showKennelSetupModal, maybeShowKennelSetupPrompt } from '../assets/kennelSetupUI.js';
+import { showKennelSetupModal } from '../assets/kennelSetupUI.js';
 import { getResetCounts, resetApp } from '../data/appReset.js';
 import { isTourAvailable, restartWizard } from '../data/wizardState.js';
 import { runWizardStep } from '../assets/wizardUI.js';
@@ -96,30 +94,24 @@ async function doRestore(mode) {
 
 renderLastBackup();
 
-function renderSampleDataStatus() {
-  const status = document.getElementById('sample-data-status');
-  const btn = document.getElementById('btn-clear-sample');
-  if (hasSampleData()) {
-    status.textContent = 'Sample "Thornfield Kennels" demo data is currently loaded.';
-    btn.style.display = '';
-  } else {
-    status.textContent = 'No sample data is loaded.';
-    btn.style.display = 'none';
-  }
-}
-
-document.getElementById('btn-clear-sample').addEventListener('click', async () => {
-  const result = await promptClearSampleData();
-  if (result?.cleared) {
-    flash(`Sample data cleared — ${result.counts.dogs} dog(s), ${result.counts.events} event(s), ${result.counts.contacts} contact(s), ${result.counts.kennels} kennel(s) removed.`);
-    renderSampleDataStatus();
-    renderTourStatus(); // the tour rides the sample data, so it's gone now too
-    renderKennelSetupStatus();
-    maybeShowKennelSetupPrompt(); // offer it right away, same as a fresh page load would
-  }
+// Backup / restore share one card with a segmented toggle — only one panel
+// shows at a time.
+const brTabs = document.getElementById('br-tabs');
+brTabs.addEventListener('click', (e) => {
+  const tab = e.target.closest('.seg-tab');
+  if (!tab) return;
+  brTabs.querySelectorAll('.seg-tab').forEach((t) => t.classList.toggle('active', t === tab));
+  const mode = tab.dataset.mode;
+  document.getElementById('br-backup').hidden = mode !== 'backup';
+  document.getElementById('br-restore').hidden = mode !== 'restore';
 });
 
-renderSampleDataStatus();
+// CSV import is a single dropdown — pick a data type and go straight to its
+// dedicated import page (each has its own dry-run preview).
+const csvSelect = document.getElementById('csv-import-select');
+csvSelect.addEventListener('change', () => {
+  if (csvSelect.value) location.href = csvSelect.value;
+});
 
 // Guided tour — the tour anchors to specific sample records, so it's only
 // offerable while the "Thornfield Kennels" sample data is loaded (same gate as
@@ -228,9 +220,7 @@ const dropboxBody = document.getElementById('dropbox-body');
 function renderDropbox() {
   if (!isDropboxConnected()) {
     dropboxBody.innerHTML = `
-      <p class="muted">Connect your own free Dropbox account to back up and sync your records — you'll sign in with
-        Dropbox and this app only ever sees its own private app folder, never the rest of your account.</p>
-      <div class="form-actions">
+      <div class="form-actions" style="margin-top:0;">
         <button class="btn btn-primary" id="dbx-connect">Connect Dropbox</button>
       </div>`;
     document.getElementById('dbx-connect').addEventListener('click', async () => {
@@ -244,12 +234,11 @@ function renderDropbox() {
   }
 
   dropboxBody.innerHTML = `
-    <p class="muted">Connected. Push after a records session; pull on your other phone to catch it up.
-      Avoid editing the <em>same record</em> on both phones between a push and a pull — the pulled copy wins.</p>
+    <p class="muted">Connected. Push after a work session; pull on your other phone to catch up.</p>
     <div class="form-actions">
-      <button class="btn btn-primary" id="dbx-push">⬆ Push to Dropbox</button>
-      <button class="btn" id="dbx-pull">⬇ Pull &amp; merge from Dropbox</button>
-      <button class="btn" id="dbx-outbox">📥 Bring in assistant updates</button>
+      <button class="btn btn-primary" id="dbx-push">⬆ Push</button>
+      <button class="btn" id="dbx-pull">⬇ Pull &amp; merge</button>
+      <button class="btn" id="dbx-outbox">📥 Bring in updates</button>
       <button class="btn" id="dbx-disconnect">Disconnect</button>
     </div>`;
   document.getElementById('dbx-push').addEventListener('click', () => runDropboxAction('dbx-push', doDropboxPush));
