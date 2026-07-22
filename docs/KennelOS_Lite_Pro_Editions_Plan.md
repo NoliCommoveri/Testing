@@ -40,16 +40,22 @@ behaves like a hard limit, for reasons specific to what the data is:
 2. **Freeing a slot means destroying the pedigree.** The only workaround — unlinking a dog
    from its litters/pairings first — guts exactly the history a breeder values most. Nobody
    trades their pedigree for one extra slot. **The incentive fights the hack.**
-3. **Archived dogs still count.** Archiving only hides a record; the row stays. If the cap
-   counts archived dogs too, archiving-to-make-room does nothing.
-4. **Faking a status corrupts their own records.** Marking a living dog "deceased" or
-   "external" to duck the count messes up the very records they're keeping — same
-   self-defeating logic as the pedigree point.
+3. **The only way to free a slot makes the dog vanish from your own app.** In Lite there is
+   **no manual "archive" button**; the sole path to archive a dog is the **"this dog left my
+   program"** action (sold / rehomed / placed), which archives it and removes it from view. A
+   departed (archived) dog does **not** count — that's the intended, honest way to free a slot.
+   But to get that slot you have to make a *real* dog disappear from your own records: you can't
+   breed it, pick it in a pairing, or even open its record. Nobody hides a dog they actually
+   have to dodge one slot, so the incentive fights the hack, same as the pedigree point.
+4. **Faking a departure corrupts their own records.** Declaring a dog "left my program" when it
+   didn't makes a dog you still own vanish from the app you rely on — same self-defeating logic
+   as the pedigree point.
 
-The only escape left is **Reset App**, which wipes their entire program — no one nukes their
-whole kennel to add a 7th dog. So the cap is technically soft but, in the hands of the person
-who actually cares about this data, sturdy. That's as good as it gets without a server, and
-it's good enough.
+Freeing a slot *honestly* means departing a dog (above). The only *dishonest* escapes are
+faking a departure — which hides a dog you still have — or **Reset App**, which wipes the entire
+program. No one nukes their whole kennel to add a 7th dog. So the cap is technically soft but,
+in the hands of the person who actually cares about this data, sturdy — as good as it gets
+without a server, and good enough.
 
 ---
 
@@ -75,19 +81,27 @@ it's good enough.
 The through-line: **Lite = keep good basic records; Pro = run it as a business.** The paid
 value is *features*, not "more of the same."
 
+Two consequences of "External dogs ❌": in Lite the dog **ownership picker offers only `owned`
+and `co_owned`** (external and leased ownership are Pro), and a dog that **leaves the program**
+isn't marked "external" — it's **departed (archived and hidden)**, per the cap spec. A browsable
+**"dogs I've placed / past dogs" history is therefore a Pro perk**; in Lite the departed dog's
+Sale record survives (who bought what), but the dog itself drops out of view.
+
 ---
 
 ## The cap, defined precisely
 
-"6 adult owned dogs" isn't one field in the app — it's a filtered count. Recommended
-definition (adjust the specifics in the open-decisions list):
+"6 adult owned dogs" isn't one field in the app — it's a filtered count. The precise definition
+(and the full enforcement design) lives in **`KennelOS_Lite_Cap_Enforcement_Spec.md`**; the
+recommended shape:
 
-**Counts toward the cap:** a dog whose **ownership is owned or co-owned** *and* whose **life
-stage is an adult stage** — active breeding, retired breeding, pet home, or for sale.
-**Include archived** ones in this count.
+**Counts toward the cap:** a **non-archived** dog whose **life stage is an adult stage** — active
+breeding, retired breeding, pet home, or for sale. (In Lite every dog is `owned`/`co_owned`, so
+ownership doesn't need testing — external and leased dogs are Pro-only and can't exist in Lite.)
 
-**Does NOT count:** puppies (so a whole litter never blows the cap), external dogs (they're
-Pro anyway and not in Lite), and deceased dogs (historical, and faking it corrupts records).
+**Does NOT count:** puppies (so a whole litter never blows the cap), **archived/departed dogs**
+(that's how you free a slot — see pillar 3), and deceased dogs (historical; faking it corrupts
+records).
 
 ### The one wrinkle: a kept puppy growing up (decided — no grandfather)
 
@@ -265,7 +279,12 @@ see "Hosting, editions, and origin isolation."
 - **Soft-delete only**; deletes never cascade and never destroy history.
 - **Referential integrity via the registry** — every foreign key stays registered (this is
   *why* the cap holds).
-- **Count includes archived** wherever the cap counts dogs or litters.
+- **Archive counts differ by entity, deliberately:** for **dogs**, archived = *departed* and is
+  **excluded** from the cap (that's the exit); there is **no manual dog-archive in Lite**, no
+  "include archived" toggle, and **no view links to an archived dog's record** (pedigree, sale,
+  roster, event log — the name shows but isn't clickable, and no "arch" badge advertises the
+  mechanism). For **litters**, archived still counts (there's no litter "departure"). Full rules
+  in `KennelOS_Lite_Cap_Enforcement_Spec.md`.
 - **IDs are random UUIDs** — no hidden sequence to exploit, and none to lean on either.
 - **Service-worker cache discipline, now ×2** — each edition has its own precache list and
   its own cache-name bump. This is the most-forgotten step; there are now two of it.
