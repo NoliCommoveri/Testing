@@ -43,29 +43,30 @@ export function mileageAmount(miles, rate) {
 
 function validateExpense(candidate) {
   if (!SUBJECT_TYPES.includes(candidate.subject_type)) {
-    throw new Error(`Expense: subject_type must be one of ${SUBJECT_TYPES.join(', ')}.`);
+    const labels = EXPENSE_SUBJECT_TYPES.map((s) => s.label).join(', ');
+    throw new Error(`Attached-to type must be one of: ${labels}.`);
   }
   if (candidate.subject_id == null || candidate.subject_id === '') {
-    throw new Error('Expense: "subject_id" is required.');
+    throw new Error('Subject is required.');
   }
   if (!candidate.expense_date) {
-    throw new Error('Expense: "expense_date" is required.');
+    throw new Error('Date is required.');
   }
   // A mileage entry (miles set) needs a non-negative rate; its amount is derived
   // in normalize(), so the amount check below runs against the computed value.
   if (candidate.miles != null) {
     const m = Number(candidate.miles);
-    if (!Number.isFinite(m) || m < 0) throw new Error('Expense: "miles" must be a non-negative number.');
+    if (!Number.isFinite(m) || m < 0) throw new Error('Miles must be a non-negative number.');
     const r = Number(candidate.mileage_rate);
     if (candidate.mileage_rate == null || !Number.isFinite(r) || r < 0) {
-      throw new Error('Expense: a mileage entry needs a rate per mile.');
+      throw new Error('A mileage entry needs a rate per mile.');
     }
   }
   const n = Number(candidate.amount);
   if (candidate.amount == null || candidate.amount === '' || !Number.isFinite(n)) {
-    throw new Error('Expense: "amount" must be a number.');
+    throw new Error('Amount must be a number.');
   }
-  if (n < 0) throw new Error('Expense: "amount" cannot be negative.');
+  if (n < 0) throw new Error('Amount cannot be negative.');
 }
 
 // Normalize the money/category fields the same way on create and update, so a
@@ -83,8 +84,11 @@ function normalize(data) {
     amount: (isMileage && rate != null) ? round2(miles * rate) : Number(data.amount),
     category: data.category || 'other',
     event_id: data.event_id || null,
-    // A human-facing receipt/reference number (plain, unindexed) that ties this
-    // ledger row back to a paper/photo receipt. Trimmed to null when blank.
+    // A human-facing receipt/invoice number (plain, unindexed) — the vendor's
+    // own number printed on the receipt, not an id of anything in KennelOS.
+    // Auto-filled by OCR off the attached receipt photo when found
+    // (data/ocr.js), editable either way. Also csvImport.js's dedup key for
+    // re-importing an expense CSV, when present. Trimmed to null when blank.
     receipt_number: (data.receipt_number == null ? '' : String(data.receipt_number)).trim() || null,
     // The stored receipt file (data/fileRepo.js), attached via the receipt
     // capture widget (assets/receiptCapture.js) — a photo/screenshot compressed

@@ -40,7 +40,10 @@ export function buildReceiptField(p, { currentFile } = {}) {
             <button type="button" class="btn btn-sm" id="${p}-btn-remove-receipt">Remove</button>
           </div>
         </div>` : ''}
-      <input type="file" id="${p}-file-photo" accept="image/*" capture="environment" style="margin-top:6px;">
+      <div id="${p}-photo-buttons" class="pill-row" style="margin-top:6px;">
+        <label class="btn btn-sm">📷 Take Photo<input type="file" id="${p}-file-camera" accept="image/*" capture="environment" hidden></label>
+        <label class="btn btn-sm">🖼 Choose from Library<input type="file" id="${p}-file-library" accept="image/*" hidden></label>
+      </div>
       <input type="file" id="${p}-file-pdf" accept="application/pdf" hidden>
       <div id="${p}-receipt-preview" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;"></div>
       <div id="${p}-scan-status" class="muted" style="font-size:13px;"></div>
@@ -52,13 +55,20 @@ export function buildReceiptField(p, { currentFile } = {}) {
 //     store (unchanged, newly built, or null if removed), cleaning up any
 //     replaced/removed file in fileRepo as it goes.
 export function wireReceiptField(modal, p, { currentFile } = {}) {
-  const photoInput = modal.querySelector(`#${p}-file-photo`);
+  // Camera and library are two SEPARATE inputs (not one input with `capture`)
+  // because `capture` forces a direct camera launch with no gallery option on
+  // Android/Chrome — the only way to offer both "take a photo" and "pick an
+  // existing photo or screenshot" is two buttons.
+  const photoButtons = modal.querySelector(`#${p}-photo-buttons`);
+  const cameraInput = modal.querySelector(`#${p}-file-camera`);
+  const libraryInput = modal.querySelector(`#${p}-file-library`);
   const pdfInput = modal.querySelector(`#${p}-file-pdf`);
   const preview = modal.querySelector(`#${p}-receipt-preview`);
   const scanStatus = modal.querySelector(`#${p}-scan-status`);
   const amountEl = modal.querySelector(`#${p}-amount`);
   const dateEl = modal.querySelector(`#${p}-date`);
   const vendorEl = modal.querySelector(`#${p}-vendor`);
+  const receiptNoEl = modal.querySelector(`#${p}-receipt`);
   const today = todayYMD();
 
   let pending = null; // { kind: 'photo'|'pdf', files: File[] }
@@ -66,7 +76,7 @@ export function wireReceiptField(modal, p, { currentFile } = {}) {
 
   function syncSourceUI() {
     const source = modal.querySelector(`input[name="${p}-rsource"]:checked`)?.value || 'photo';
-    photoInput.hidden = source !== 'photo';
+    photoButtons.hidden = source !== 'photo';
     pdfInput.hidden = source !== 'pdf';
   }
   modal.querySelectorAll(`input[name="${p}-rsource"]`).forEach((r) => r.addEventListener('change', syncSourceUI));
@@ -91,21 +101,24 @@ export function wireReceiptField(modal, p, { currentFile } = {}) {
   }
 
   // Auto-scan a freshly picked photo (captured or chosen from the library,
-  // including a screenshot) and fill amount/date/vendor when they're still
-  // blank/default — never overwriting something the user already typed.
+  // including a screenshot) and fill amount/date/vendor/receipt # when
+  // they're still blank/default — never overwriting something the user
+  // already typed. Not every receipt prints its own number, so that field is
+  // best-effort and often stays blank for manual entry.
   async function runScan(file) {
     let available = false;
     try { available = await ocr.isAvailable(); } catch { available = false; }
     if (!available) return;
     scanStatus.textContent = 'Reading receipt…';
     try {
-      const { amount, date, vendor } = await ocr.scan(file, (pr) => {
+      const { amount, date, vendor, receiptNumber } = await ocr.scan(file, (pr) => {
         scanStatus.textContent = `Reading receipt… ${Math.round(pr * 100)}%`;
       });
       const filled = [];
       if (amount != null && amountEl && !amountEl.value) { amountEl.value = amount; filled.push('amount'); }
       if (date && dateEl && dateEl.value === today) { dateEl.value = date; filled.push('date'); }
       if (vendor && vendorEl && !vendorEl.value) { vendorEl.value = vendor; filled.push('vendor'); }
+      if (receiptNumber && receiptNoEl && !receiptNoEl.value) { receiptNoEl.value = receiptNumber; filled.push('receipt #'); }
       scanStatus.textContent = filled.length
         ? `Filled ${filled.join(', ')} from the receipt — please double-check.`
         : 'Couldn’t read the details — enter them by hand.';
@@ -114,13 +127,15 @@ export function wireReceiptField(modal, p, { currentFile } = {}) {
     }
   }
 
-  photoInput.addEventListener('change', () => {
-    const f = photoInput.files[0];
+  function onPhotoPicked(input) {
+    const f = input.files[0];
     pending = f ? { kind: 'photo', files: [f] } : null;
     removeCurrent = false;
     renderPreview();
     if (f) runScan(f);
-  });
+  }
+  cameraInput.addEventListener('change', () => onPhotoPicked(cameraInput));
+  libraryInput.addEventListener('change', () => onPhotoPicked(libraryInput));
   pdfInput.addEventListener('change', () => {
     const f = pdfInput.files[0];
     pending = f ? { kind: 'pdf', files: [f] } : null;
@@ -136,7 +151,8 @@ export function wireReceiptField(modal, p, { currentFile } = {}) {
   modal.querySelector(`#${p}-btn-remove-receipt`)?.addEventListener('click', (e) => {
     removeCurrent = true;
     pending = null;
-    photoInput.value = '';
+    cameraInput.value = '';
+    libraryInput.value = '';
     pdfInput.value = '';
     preview.innerHTML = '';
     scanStatus.textContent = 'Receipt will be removed on save.';

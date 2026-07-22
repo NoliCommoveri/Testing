@@ -188,7 +188,10 @@ function openAddEditModal(existingId, defaultDogId) {
           ${isEdit ? `<p class="muted" style="font-size:13px;">Current file: ${esc(currentFile?.filename || 'unknown')} (${fmtBytes(currentFile?.size)}) — pick a new one below to replace it, or leave as-is.</p>` : ''}
           <div class="field">
             <input type="file" id="doc-file-pdf" accept="application/pdf">
-            <input type="file" id="doc-file-photo" accept="image/*" capture="environment" multiple hidden>
+            <div id="doc-photo-buttons" class="pill-row" hidden>
+              <label class="btn btn-sm">📷 Take Photo<input type="file" id="doc-file-camera" accept="image/*" capture="environment" multiple hidden></label>
+              <label class="btn btn-sm">🖼 Choose from Library<input type="file" id="doc-file-library" accept="image/*" multiple hidden></label>
+            </div>
             <div id="doc-file-preview" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"></div>
           </div>
 
@@ -231,16 +234,22 @@ function openAddEditModal(existingId, defaultDogId) {
       modal.querySelector('#doc-extra-fields').innerHTML = extraFieldsHtml(e.target.value, null);
     });
 
-    // Source radio -> which file input shows; both inputs feed the same
-    // pendingFiles variable so Save doesn't care which path was used.
+    // Source radio -> which file control shows. Camera and library are two
+    // SEPARATE inputs (not one input with `capture`) because `capture` forces
+    // a direct camera launch with no gallery option on Android/Chrome — the
+    // only way to offer both "take a photo" and "pick an existing photo or
+    // screenshot" is two buttons, each feeding the same pendingFiles variable
+    // so Save doesn't care which path was used.
     const pdfInput = modal.querySelector('#doc-file-pdf');
-    const photoInput = modal.querySelector('#doc-file-photo');
+    const photoButtons = modal.querySelector('#doc-photo-buttons');
+    const cameraInput = modal.querySelector('#doc-file-camera');
+    const libraryInput = modal.querySelector('#doc-file-library');
     const preview = modal.querySelector('#doc-file-preview');
 
     function syncSourceUI() {
       const source = modal.querySelector('input[name="doc-source"]:checked').value;
       pdfInput.hidden = source !== 'pdf';
-      photoInput.hidden = source !== 'photo';
+      photoButtons.hidden = source !== 'photo';
     }
     modal.querySelectorAll('input[name="doc-source"]').forEach((r) => r.addEventListener('change', syncSourceUI));
     syncSourceUI();
@@ -269,10 +278,12 @@ function openAddEditModal(existingId, defaultDogId) {
       pendingFiles = pdfInput.files[0] ? { kind: 'pdf', files: [pdfInput.files[0]] } : null;
       renderFilePreview();
     });
-    photoInput.addEventListener('change', () => {
-      pendingFiles = photoInput.files.length ? { kind: 'photo', files: Array.from(photoInput.files) } : null;
+    function onPhotoPicked(input) {
+      pendingFiles = input.files.length ? { kind: 'photo', files: Array.from(input.files) } : null;
       renderFilePreview();
-    });
+    }
+    cameraInput.addEventListener('change', () => onPhotoPicked(cameraInput));
+    libraryInput.addEventListener('change', () => onPhotoPicked(libraryInput));
 
     modal.querySelector('#doc-form').addEventListener('submit', async (e) => {
       e.preventDefault();
